@@ -26,7 +26,7 @@ The application is now close to feature-complete, but additional testing is stil
 
 ### Dashboard
 
-![MDADM Manager Dashboard](screenshots/dashboard.png)
+![MDADM Manager Dashboard](https://raw.githubusercontent.com/st3ph666/MDADM-Manager/main/screenshots/dashboard.png)
 
 Monitor mdadm arrays, RAID state, capacity, mounted filesystems, member disks, SMART information, and maintenance actions from the main dashboard.
 
