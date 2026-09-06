@@ -2,187 +2,356 @@
 
 **MDADM Manager** is a graphical RAID management and monitoring application for Linux built around `mdadm`.
 
-> **⚠️ BETA SOFTWARE**
+It provides a Matrix-style graphical interface for RAID creation, monitoring, disk health inspection, SMART diagnostics, and common RAID maintenance tasks.
+
+> ⚠️ **RELEASE CANDIDATE / BETA SOFTWARE**
 >
-> This project performs privileged disk and RAID operations. Always keep verified backups of important data and carefully review the generated commands before confirming destructive operations.
+> This project performs privileged disk and RAID operations. Always keep verified backups of important data and carefully review operations before confirming destructive actions.
 
-## Current Beta
+---
 
-**v1.29-beta**
+## Current Version
 
-The project is currently in public beta. Features and interface elements may change, and additional testing on different Linux distributions and storage configurations is welcome.
+### **v1.48 RC1**
 
-## Features
+**Release Candidate — Final testing phase**
 
-- Graphical Matrix-style interface
-- RAID monitoring and management
-- Guided RAID creation wizard
-- RAID 0, RAID 1, RAID 5, RAID 6 and RAID 10
-- Physical disk and RAID member information
-- HDD, SATA SSD and NVMe SMART information
-- HDD monitoring risk index based on age and relevant SMART attributes
-- SSD/NVMe wear information when exposed by SMART
-- Samsung 870 EVO TBW usage calculation when supported
-- RAID member replacement workflow
-- Array mount information
-- `/etc/mdadm/mdadm.conf` viewing and management
-- RAID level information and diagrams
+MDADM Manager v1.48 RC1 represents a major evolution of the project since the original public beta v1.29.
+
+The application is now close to feature-complete, but additional testing is still required before v1.48 is declared stable.
+
+---
+
+## Main Features
+
+- Graphical management of Linux `mdadm` RAID arrays
+- RAID creation wizard
+- RAID member detection and status display
+- Disk and RAID health monitoring
+- SMART monitoring for HDD, SATA SSD, and NVMe drives
+- Disk temperature display
+- SMART error and sector monitoring
+- HDD statistical risk indicator
+- SSD/NVMe wear and endurance information
+- TB written calculation when supported
+- RAID member safety checks
+- `/etc/fstab` protection checks
+- RAID superblock protection checks
+- French / English interface
+- Progressive startup for faster GUI display
+- Background SMART scanning
+- Matrix-style black and green interface
+- Beginner-friendly bilingual source-code comments
+
+---
+
+## Major Improvements Since v1.29
+
+### Code organization
+
+The source code has been reorganized into clear logical sections:
+
+1. Internationalization / translations
+2. System commands and privileges
+3. RAID and device detection
+4. SMART and disk health
+5. RAID, FSTAB, and superblock safety
+6. GUI infrastructure
+7. RAID creation wizard
+8. Main application
+9. Startup and dependency handling
+
+Extensive beginner-friendly comments were also added throughout the code.
+
+---
+
+## French / English Support
+
+The application now includes expanded bilingual support.
+
+Improvements include:
+
 - French and English interface
-- Automatic graphical privilege elevation
-- Existing RAID member protection
-- Active `/etc/fstab` protection
-- Safe detection of old mdadm superblocks
-- Confirmation before destructive metadata cleanup
-- Disk availability analysis before RAID creation
+- RAID creation wizard translation
+- RAID management translation
+- SMART diagnostic translation
+- Dynamic language switching
+- Language menu
+- Bilingual beginner-friendly comments in the source code
 
-## Safety Protections
+---
 
-MDADM Manager includes several safeguards intended to reduce accidental data loss.
+## Startup and Performance
 
-A disk is protected from destructive RAID creation or metadata cleanup when it is detected as belonging to an active RAID or when the disk or one of its partitions is referenced by an active `/etc/fstab` entry.
+Startup behavior has been significantly improved.
 
-Commented `/etc/fstab` entries beginning with `#` or `##` are ignored.
+The application now:
 
-Before removing an old mdadm superblock, the application examines the selected device, checks RAID and FSTAB protection again, displays the detected metadata, and requests confirmation.
+- Displays the main interface before long SMART operations finish
+- Performs SMART scans in the background
+- Uses non-blocking disk refresh operations
+- Loads tabs progressively
+- Prioritizes a tab when the user selects it before background loading is complete
+- Reduces startup delays on systems with many disks
 
-These safeguards **do not replace backups**.
+Several startup crashes caused by widgets being accessed before initialization were also corrected.
 
-## Requirements
+---
 
-MDADM Manager is currently developed and tested primarily for Debian-based Linux systems.
+## Matrix Interface Improvements
 
-### Debian 13 / Debian-based systems
+The interface has received several visual improvements:
 
-```bash
-sudo apt update
-sudo apt install mdadm smartmontools python3-tk polkitd pkexec kde-cli-tools
-```
+- Consistent black background
+- Green Matrix-style text
+- Improved Listbox appearance
+- Improved Text and Entry widgets
+- Matrix-style Combobox controls
+- Improved RAID selection readability
+- Removal of white areas during progressive startup
+- More consistent visual behavior between tabs
 
-Main requirements:
-
-- Python 3
-- Tkinter
-- `mdadm`
-- `smartmontools`
-- `lsblk`
-- `blkid`
-- `udevadm`
-- `pkexec` or KDE `kdesu` for graphical privilege elevation
-
-No external Python packages installed through `pip` are currently required.
-
-## Installation
-
-Download or clone the repository:
-
-```bash
-git clone https://github.com/YOUR-USERNAME/MDADM-Manager.git
-cd MDADM-Manager
-```
-
-Make the program executable:
-
-```bash
-chmod +x mdadm_manager_v1.29.py
-```
-
-Run it:
-
-```bash
-./mdadm_manager_v1.29.py
-```
-
-The application will attempt to request administrator privileges graphically when required.
-
-You can also start it from a terminal:
-
-```bash
-python3 mdadm_manager_v1.29.py
-```
-
-## Language
-
-The interface supports:
-
-- English
-- Français
-
-The selected language is stored locally in:
-
-```text
-~/.config/mdadm-manager/language.conf
-```
-
-Some translations may still be refined during the beta period.
+---
 
 ## SMART Monitoring
 
-MDADM Manager can display SMART information for HDDs, SATA SSDs and NVMe drives when supported by the hardware and `smartctl`.
+SMART support has been greatly expanded.
 
-For HDDs, the displayed risk percentage is a **monitoring index**, not a prediction of remaining drive life. It combines power-on age with selected SMART warning indicators such as reallocated, pending and uncorrectable sectors.
+### HDD
 
-For SSDs and NVMe devices, the application prefers actual wear/endurance values reported by SMART rather than estimating remaining life from power-on hours.
+Available information may include:
+
+- SMART health
+- Temperature
+- Minimum / maximum temperature when reported
+- Power-on hours
+- Power cycles
+- Start / stop cycles
+- Load / unload cycles
+- Reallocated sectors
+- Pending sectors
+- Offline uncorrectable sectors
+- Reported uncorrectable errors
+- Spin retry count
+- Command timeouts
+- UDMA CRC errors
+- Total LBAs written
+- Total LBAs read
+- Actual TB written when the drive exposes the required SMART attribute
+- Statistical HDD risk index
+
+The HDD risk value is a **monitoring indicator**, not an estimate of remaining drive life.
+
+### SATA SSD
+
+Additional SSD information may include:
+
+- SSD wear
+- Remaining life attributes
+- TB written
+- Manufacturer TBW rating when known
+- TBW used percentage
+- TBW remaining percentage
+
+Samsung 870 EVO endurance ratings are supported for known capacities.
+
+### NVMe
+
+NVMe monitoring may include:
+
+- Percentage Used
+- Media and Data Integrity Errors
+- Power-on hours
+- Power cycles
+- Data Units Written
+- Estimated TB written
+- Temperature
+- SMART health
+
+---
+
+## Disk Temperature Integration
+
+A compact **Temp** column has been added to the main disk views.
+
+Temperature is now displayed in:
+
+- Dashboard RAID member view
+- Manage RAID
+- Disks tab
+- Create RAID disk selection
+
+Example:
+
+```text
+31 °C
+```
+
+If a drive does not report temperature, the interface displays:
+
+```text
+—
+```
+
+---
 
 ## RAID Creation Wizard
 
-The RAID creation assistant guides the user through:
+The RAID creation wizard includes:
 
-1. RAID level selection
-2. Disk selection
-3. RAID options
-4. Final command review and confirmation
+- RAID level selection
+- Minimum disk requirements
+- Fault-tolerance information
+- RAID level explanations
+- Configuration validation
+- Disk selection
+- SMART information
+- Disk temperature
+- Progress information
+- Safety checks before creation
 
-The wizard calculates an estimated usable capacity from the smallest selected member and prevents selection of protected RAID/FSTAB disks.
+---
 
-## Supported RAID Levels
+## RAID Management
 
-| Level | Minimum disks | General purpose |
-|---|---:|---|
-| RAID 0 | 2 | Performance/capacity, no redundancy |
-| RAID 1 | 2 | Mirroring |
-| RAID 5 | 3 | Single-parity redundancy |
-| RAID 6 | 4 | Dual-parity redundancy |
-| RAID 10 | 4 recommended | Mirroring + striping |
+MDADM Manager provides graphical access to RAID information and maintenance operations.
 
-RAID suitability depends on workload, hardware, backup strategy and failure requirements.
+Current features include:
 
-## Important Warning
+- RAID array detection
+- RAID member display
+- Member state information
+- Physical disk information
+- SMART information for RAID members
+- Disk error indicators
+- Usage information
+- Temperature monitoring
+- RAID safety checks
 
-Operations such as RAID creation, member replacement and superblock removal can cause permanent data loss when used incorrectly.
+Because RAID operations can be destructive, the application performs additional validation before sensitive actions.
 
-Before using destructive operations:
+---
 
-- Verify the selected device names.
-- Verify that important data is backed up.
-- Confirm that the disk does not contain data you need.
-- Review the exact `mdadm` command displayed by the application.
+## Safety Features
 
-## Bug Reports and Feature Requests
+MDADM Manager includes checks intended to reduce accidental data loss.
 
-This is a beta release. Bug reports, hardware compatibility feedback and feature suggestions are welcome through GitHub Issues.
+These include:
 
-When reporting a problem, please include:
+- Detection of disks already used by RAID
+- RAID member protection
+- Filesystem checks
+- Mounted filesystem detection
+- `/etc/fstab` checks
+- mdadm superblock checks
+- Confirmation before destructive operations
+
+These protections do **not** replace verified backups.
+
+---
+
+## Requirements
+
+MDADM Manager is designed primarily for Linux systems using `mdadm`.
+
+Typical requirements include:
+
+```text
+Python 3
+python3-tk
+mdadm
+smartmontools
+lsblk
+util-linux
+```
+
+Depending on the distribution and desktop environment, privilege escalation may use tools such as:
+
+```text
+pkexec
+kdesu
+```
+
+---
+
+## Running MDADM Manager
+
+Make the script executable:
+
+```bash
+chmod +x mdadm_manager_v1.48.py
+```
+
+Then run it:
+
+```bash
+python3 mdadm_manager_v1.48.py
+```
+
+The application may request administrative privileges because RAID and SMART operations often require root access.
+
+---
+
+## Current Testing Status
+
+v1.48 RC1 is **almost complete** and is currently in final testing.
+
+Areas that still require additional real-world testing include:
+
+- HDD SMART monitoring
+- SATA SSD SMART monitoring
+- NVMe SMART monitoring
+- Disk temperature reporting
+- RAID creation
+- RAID member removal and replacement
+- Faulty disk operations
+- RAID protection checks
+- `/etc/fstab` protection
+- Background SMART refresh
+- French / English switching
+- Progressive startup
+- Different RAID levels
+- Systems with many disks
+- Different Debian / Linux configurations
+- Different screen resolutions
+
+---
+
+## Release Status
+
+**Current release: v1.48 RC1**
+
+This version is published as a **pre-release / release candidate**.
+
+Once final testing is complete, it will become:
+
+### **MDADM Manager v1.48 Stable**
+
+---
+
+## Development
+
+MDADM Manager is actively developed and tested on Linux.
+
+Bug reports, testing feedback, and contributions are welcome.
+
+If you test this release, useful feedback includes:
 
 - Linux distribution and version
-- MDADM Manager version
-- `mdadm --version`
-- Relevant RAID level
-- Number/type of drives
-- Error message or screenshot
-- Steps needed to reproduce the issue
+- Kernel version
+- RAID level
+- Number and type of disks
+- HDD / SSD / NVMe models
+- Error message or traceback
+- Screenshot when relevant
+- Steps required to reproduce the problem
 
-**Do not post sensitive disk contents, passwords, private keys or other confidential information.**
-
-## Roadmap
-
-Planned beta improvements include broader English translation coverage, additional validation and safety checks, UI refinements, testing on more Linux distributions, and continued SMART/RAID monitoring improvements.
-
-## License
-
-A license file will be added to the repository. Until a license is selected and published, normal copyright rules apply.
+---
 
 ## Disclaimer
 
-MDADM Manager is an independent open-source project and is not affiliated with the Linux kernel project, the `mdadm` maintainers, drive manufacturers, or Linux distribution vendors.
+MDADM Manager performs operations on physical disks and RAID arrays.
 
-Use this software at your own risk. RAID is not a backup.
+Incorrect RAID operations can cause permanent data loss.
+
+Use this software at your own risk and always maintain verified backups of important data.
