@@ -22,6 +22,44 @@ The application is now close to feature-complete, but additional testing is stil
 
 ---
 
+## Screenshots
+
+### Dashboard
+
+Monitor mdadm arrays, RAID state, capacity, mounted filesystems, member disks, SMART information, and maintenance actions from the main dashboard.
+
+![MDADM Manager Dashboard](screenshots/dashboard.png)
+
+### Create RAID Wizard
+
+Guided RAID creation with RAID-level explanations, disk analysis, SMART checks, safety protections, capacity estimates, and final command verification.
+
+![MDADM Manager Create RAID Wizard](screenshots/create-raid.png)
+
+### Manage RAID
+
+Manage existing arrays and their members, including array details, assemble/stop/check/repair operations, member replacement and removal, SMART information, disk errors, usage, and temperature.
+
+![MDADM Manager Manage RAID](screenshots/manage-raid.png)
+
+### Disks & SMART Monitoring
+
+View physical disks, model and serial information, temperatures, RAID membership, RAID state, SMART health, error indicators, and disk usage information in one place.
+
+![MDADM Manager Disks and SMART Monitoring](screenshots/disks-smart.png)
+
+### mdadm Configuration
+
+Load, inspect, scan, save, and back up the system `mdadm.conf` configuration directly from the graphical interface.
+
+![MDADM Manager mdadm Configuration](screenshots/mdadm-configuration.png)
+
+### RAID Information
+
+Built-in visual reference for RAID 0, RAID 1, RAID 5, RAID 6, RAID 10 and other supported RAID concepts, including minimum disks, fault tolerance, usable capacity, advantages, and risks.
+
+![MDADM Manager RAID Information](screenshots/raid-info.png)
+
 ## Main Features
 
 - Graphical management of Linux `mdadm` RAID arrays
