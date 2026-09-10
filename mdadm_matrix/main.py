@@ -1,110 +1,45 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-MDADM Manager - v1.32
-Interface graphique de surveillance et configuration mdadm pour Linux/Debian.
-
-Dépendances système recommandées :
-    apt install mdadm smartmontools python3-tk kde-cli-tools pkexec
-
-L'application fonctionne en root.
-Si elle est lancée par double-clic comme utilisateur normal, elle se relance
-avec une fenêtre graphique d'authentification KDE (kdesu), puis utilise
-pkexec en solution de secours.
-"""
+"""Application entry point for MDADM Manager."""
 
 import os
-import sys
-import re
-import shlex
 import shutil
-import subprocess
-import threading
-import math
-import time
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog, filedialog
-from pathlib import Path
+from tkinter import messagebox
 
-APP_VERSION = "1.48"
-APP_TITLE = f"MDADM Manager v{APP_VERSION} // MATRIX ROOT"
+from . import APP_VERSION
+from .system import relaunch_as_root
+from .gui import MdadmManager
 
-
-
-# =============================================================================
-# MDADM MANAGER — ARCHITECTURE DU SCRIPT / SCRIPT ARCHITECTURE
-# =============================================================================
-#
-# Ce fichier reste volontairement autonome (un seul .py), mais il est organisé
-# en modules logiques clairement séparés afin de faciliter le développement,
-# les revues GitHub et le travail à plusieurs.
-#
-# MODULE 1  — INTERNATIONALISATION / I18N
-#   ui_text, language_config_path, load_language, save_language, tr
-#
-# MODULE 2  — COMMANDES SYSTÈME ET PRIVILÈGES
-#   run, shell_join, privileged_cmd, find_kdesu, relaunch_as_root
-#
-# MODULE 3  — DÉTECTION RAID ET PÉRIPHÉRIQUES
-#   get_md_arrays, get_block_devices, get_raid_membership_map,
-#   clean_device_path, physical_disk_info, block_device_info,
-#   parse_mdadm_members, get_candidate_replacement_devices,
-#   get_array_mount_info
-#
-# MODULE 4  — SMART / SANTÉ DES DISQUES
-#   resolve_smart_device, detect_disk_kind, hdd_risk_index,
-#   samsung_870_evo_tbw_rating, total_lbas_written_to_tb,
-#   smart_usage_metrics
-#
-# MODULE 5  — PROTECTIONS FSTAB / RAID / SUPERBLOCK
-#   resolve_fstab_source, get_fstab_entries, device_family_paths,
-#   fstab_protection_entries, protected_fstab_message,
-#   raid_protection_memberships, protected_raid_message,
-#   mdadm_examine_superblock, candidate_member_paths_for_cleanup,
-#   safe_orphan_superblocks
-#
-# MODULE 6  — INFRASTRUCTURE INTERFACE GRAPHIQUE
-#   install_tk_translation_hooks, ConfirmDialog
-#
-# MODULE 7  — ASSISTANT DE CRÉATION RAID
-#   RaidCreationWizard
-#
-# MODULE 8  — APPLICATION PRINCIPALE
-#   MdadmManager
-#
-# MODULE 9  — DÉMARRAGE ET DÉPENDANCES
 #   dependency_check + bloc __main__
 #
-# RÈGLE DE SÉCURITÉ:
-#   Toute opération destructive doit repasser par les protections RAID/FSTAB
-#   immédiatement avant l'écriture effective sur le disque.
+
+
+
 #
 # =============================================================================
 
 
 
 # =============================================================================
-# GUIDE POUR PROGRAMMEUR DÉBUTANT / BEGINNER PROGRAMMER GUIDE
+
 # =============================================================================
 #
-# FR — COMMENT LIRE CE FICHIER
+
 # ----------------------------
-# 1) Le programme est volontairement contenu dans UN SEUL fichier Python.
-#    Il est toutefois divisé en 9 modules logiques clairement identifiés.
-# 2) Les fonctions placées avant les classes sont surtout des OUTILS :
+
+
+
 #    elles lisent Linux, mdadm, lsblk, SMART, fstab, etc.
-# 3) RaidCreationWizard construit la fenêtre de création guidée d'un RAID.
-# 4) MdadmManager est la fenêtre principale de l'application.
-# 5) Les méthodes qui commencent par "_build_" construisent uniquement
-#    des parties de l'interface graphique Tkinter.
-# 6) Les méthodes qui commencent par "refresh_" relisent l'état du système
-#    et mettent l'interface à jour.
-# 7) Les méthodes "manage_*" exécutent les opérations mdadm sur un RAID.
-# 8) Toute commande destructive doit être précédée des protections RAID/FSTAB.
-#    NE PAS contourner ces vérifications lorsqu'on modifie le programme.
+
+
+
+
+
+
+
+
+
 #
-# EN — HOW TO READ THIS FILE
+# HOW TO READ THIS FILE
 # --------------------------
 # 1) The program intentionally lives in ONE Python file, but it is split into
 #    9 clearly identified logical modules.
@@ -120,16 +55,16 @@ APP_TITLE = f"MDADM Manager v{APP_VERSION} // MATRIX ROOT"
 #
 # MINI GLOSSAIRE / MINI GLOSSARY
 # ------------------------------
-# FR:
-#   fonction       = bloc de code réutilisable appelé avec nom(...)
-#   méthode         = fonction appartenant à une classe (self représente l'objet)
-#   classe          = modèle servant à construire une fenêtre/objet
-#   dictionnaire    = structure clé -> valeur, ex. {"state": "clean"}
-#   liste           = collection ordonnée, ex. ["/dev/sda", "/dev/sdb"]
-#   callback        = fonction appelée par Tkinter après un clic/événement
-#   thread          = travail exécuté en parallèle pour ne pas figer l'interface
+
+
+
+
+
+
+
+
 #
-# EN:
+
 #   function        = reusable code block called with name(...)
 #   method          = function owned by a class (self is the current object)
 #   class           = blueprint used to build a window/object
@@ -139,15 +74,15 @@ APP_TITLE = f"MDADM Manager v{APP_VERSION} // MATRIX ROOT"
 #   thread          = parallel work used to keep the GUI responsive
 #
 # CONSEIL / TIP:
-#   Pour suivre une action, partez du texte du bouton dans "_build_*", trouvez
-#   son paramètre command=..., puis suivez la méthode appelée.
+
+
 #   To trace an action, start from the button text in "_build_*", find its
 #   command=... parameter, then follow the referenced method.
 #
 # =============================================================================
 
 # =============================================================================
-# MODULE 1 — INTERNATIONALISATION / MODULE 1 — INTERNATIONALIZATION
+# MODULE 1 — INTERNATIONALIZATION
 # =============================================================================
 
 LANGUAGES = {
@@ -267,7 +202,7 @@ FR_EN_TEXT = {
     "L'opération destructive est bloquée.": "The destructive operation is blocked.",
     "Aucun RAID détecté.": "No RAID detected.",
     "Aucun disque détecté.": "No disk detected.",
-    # v1.31 — traductions complètes des écrans principaux
+    
     "GUIDE VISUEL DES TYPES DE RAID": "VISUAL GUIDE TO RAID TYPES",
     "Le RAID combine plusieurs disques pour obtenir plus de vitesse, plus de capacité ou de la redondance. IMPORTANT : un RAID ne remplace jamais une sauvegarde.": "RAID combines multiple disks to provide more speed, capacity, or redundancy. IMPORTANT: RAID never replaces a backup.",
     "RAPIDE, MAIS AUCUNE PROTECTION": "FAST, BUT NO PROTECTION",
@@ -336,7 +271,7 @@ FR_EN_TEXT = {
     "Rafraîchissement": "Refresh", "Prêt": "Ready",
     "Disque sélectionné :": "Selected disk:",
 
-    # v1.32 — éléments encore visibles en français dans Create RAID / Manage RAID
+    
     "ASSISTANT DE CRÉATION RAID": "RAID CREATION WIZARD",
     "Création guidée en 4 étapes : choix du niveau RAID, analyse et sélection des disques, paramètres, puis vérification finale.":
         "Guided creation in 4 steps: choose the RAID level, analyze and select disks, set parameters, then perform the final verification.",
@@ -422,8 +357,8 @@ FR_EN_TEXT = {
     "Combine mirroring et striping. Très bonnes performances et reconstruction généralement plus simple. Un nombre pair de disques est recommandé.": "Combines mirroring and striping. Very good performance and generally simpler rebuilding. An even number of disks is recommended.",
 }
 
-# BEGINNER: FR — Traduit un texte d'interface déjà construit du français vers l'anglais lorsque la langue active est English.
-# BEGINNER: EN — Translates an already-built UI string from French to English when the active language is English.
+
+# Translates an already-built UI string from French to English when the active language is English.
 def ui_text(value):
     if CURRENT_LANGUAGE != "en" or not isinstance(value, str):
         return value
@@ -446,8 +381,8 @@ def ui_text(value):
     return result
 
 
-# BEGINNER: FR — Retourne le chemin du petit fichier qui mémorise la langue choisie par l'utilisateur.
-# BEGINNER: EN — Returns the path of the small file that remembers the user's selected language.
+
+# Returns the path of the small file that remembers the user's selected language.
 def language_config_path():
     base = Path.home() / ".config" / "mdadm-manager"
     try:
@@ -457,8 +392,8 @@ def language_config_path():
     return base / "language.conf"
 
 
-# BEGINNER: FR — Lit la langue sauvegardée; en cas d'erreur ou de valeur inconnue, le français est utilisé par défaut.
-# BEGINNER: EN — Reads the saved language; on error or unknown value, French is used as the default.
+
+# Reads the saved language; on error or unknown value, French is used as the default.
 def load_language():
     try:
         value = language_config_path().read_text(encoding="utf-8").strip().lower()
@@ -469,8 +404,8 @@ def load_language():
     return "fr"
 
 
-# BEGINNER: FR — Enregistre le code de langue dans le dossier de configuration de l'utilisateur.
-# BEGINNER: EN — Saves the language code in the user's configuration directory.
+
+# Saves the language code in the user's configuration directory.
 def save_language(code):
     if code not in LANGUAGES:
         return False
@@ -484,8 +419,8 @@ def save_language(code):
 CURRENT_LANGUAGE = load_language()
 
 
-# BEGINNER: FR — Point d'entrée principal des traductions par clé. Utiliser tr(...) pour les textes fixes de l'interface.
-# BEGINNER: EN — Main key-based translation entry point. Use tr(...) for fixed GUI text.
+
+# Main key-based translation entry point. Use tr(...) for fixed GUI text.
 def tr(key):
     value = I18N.get(CURRENT_LANGUAGE, I18N["fr"]).get(
         key,
@@ -498,11 +433,11 @@ MDADM_CONF = "/etc/mdadm/mdadm.conf"
 
 
 # =============================================================================
-# MODULE 2 — COMMANDES SYSTÈME ET PRIVILÈGES / MODULE 2 — SYSTEM COMMANDS AND PRIVILEGES
+# MODULE 2 — SYSTEM COMMANDS AND PRIVILEGES
 # =============================================================================
 
-# BEGINNER: FR — Exécute une commande système sans shell, capture stdout/stderr et protège l'application avec un délai maximal.
-# BEGINNER: EN — Runs a system command without a shell, captures stdout/stderr, and protects the app with a timeout.
+
+# Runs a system command without a shell, captures stdout/stderr, and protects the app with a timeout.
 def run(cmd, timeout=20):
     try:
         p = subprocess.run(
@@ -520,23 +455,23 @@ def run(cmd, timeout=20):
         return 1, str(exc)
 
 
-# BEGINNER: FR — Transforme une liste d'arguments en commande lisible/échappée, surtout pour kdesu.
-# BEGINNER: EN — Turns an argument list into a safely quoted readable command, mainly for kdesu.
+
+# Turns an argument list into a safely quoted readable command, mainly for kdesu.
 def shell_join(cmd):
     return " ".join(shlex.quote(str(x)) for x in cmd)
 
 
-# BEGINNER: FR — Point central prévu pour préparer une commande nécessitant les privilèges root.
-# BEGINNER: EN — Central hook intended to prepare a command that requires root privileges.
+
+# Central hook intended to prepare a command that requires root privileges.
 def privileged_cmd(cmd):
     return list(cmd)
 
 
 
-# BEGINNER: FR — Cherche l'exécutable kdesu dans plusieurs emplacements possibles sous KDE.
-# BEGINNER: EN — Looks for the kdesu executable in several possible KDE locations.
+
+# Looks for the kdesu executable in several possible KDE locations.
 def find_kdesu():
-    """Retourne le chemin de kdesu si disponible sur KDE/Debian."""
+
     candidates = [
         shutil.which("kdesu"),
         shutil.which("kdesu5"),
@@ -552,14 +487,14 @@ def find_kdesu():
     return None
 
 
-# BEGINNER: FR — Relance ce même script avec droits administrateur via kdesu, puis pkexec en secours.
-# BEGINNER: EN — Relaunches this same script with administrator rights using kdesu, then pkexec as fallback.
+
+# Relaunches this same script with administrator rights using kdesu, then pkexec as fallback.
 def relaunch_as_root():
-    """Relance l'application avec une boîte graphique d'authentification."""
+
     script = str(Path(__file__).resolve())
     python_exe = sys.executable or "/usr/bin/python3"
 
-    # Priorité à KDE su : fenêtre graphique demandant le mot de passe root/admin.
+    
     kdesu = find_kdesu()
     if kdesu:
         command = shell_join([python_exe, script])
@@ -590,13 +525,13 @@ def relaunch_as_root():
 
 
 # =============================================================================
-# MODULE 3 — DÉTECTION RAID ET PÉRIPHÉRIQUES / MODULE 3 — RAID AND DEVICE DISCOVERY
+# MODULE 3 — RAID AND DEVICE DISCOVERY
 # =============================================================================
 
-# BEGINNER: FR — Lit /proc/mdstat et retourne les RAID mdadm actuellement assemblés.
-# BEGINNER: EN — Reads /proc/mdstat and returns the mdadm arrays that are currently assembled.
+
+# Reads /proc/mdstat and returns the mdadm arrays that are currently assembled.
 def get_md_arrays():
-    """Retourne les arrays mdadm détectés via /proc/mdstat."""
+
     arrays = []
     mdstat = Path("/proc/mdstat")
     if not mdstat.exists():
@@ -616,10 +551,10 @@ def get_md_arrays():
     return arrays
 
 
-# BEGINNER: FR — Utilise lsblk en JSON pour inventorier disques, partitions, tailles, modèles, UUID et montages.
-# BEGINNER: EN — Uses lsblk JSON output to inventory disks, partitions, sizes, models, UUIDs, and mounts.
+
+# Uses lsblk JSON output to inventory disks, partitions, sizes, models, UUIDs, and mounts.
 def get_block_devices():
-    """Inventorie les périphériques bloc et leurs métadonnées avec lsblk."""
+
     cmd = [
         "lsblk", "-J", "-b",
         "-o", "NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,MOUNTPOINTS"
@@ -635,8 +570,8 @@ def get_block_devices():
 
     result = []
 
-    # BEGINNER: FR — Parcourt récursivement l'arbre JSON de lsblk afin de ne manquer aucune partition/enfant.
-    # BEGINNER: EN — Recursively walks the lsblk JSON tree so no child partition/device is missed.
+    
+    # Recursively walks the lsblk JSON tree so no child partition/device is missed.
     def walk(nodes):
         for n in nodes:
             result.append(n)
@@ -650,10 +585,10 @@ def get_block_devices():
 
 
 
-# BEGINNER: FR — Construit une carte fiable disque physique -> membre(s) RAID à partir des RAID réellement assemblés.
-# BEGINNER: EN — Builds a reliable physical-disk -> RAID-member map from arrays that are actually assembled.
+
+# Builds a reliable physical-disk -> RAID-member map from arrays that are actually assembled.
 def get_raid_membership_map():
-    """Construit une carte périphérique -> appartenance(s) RAID active(s)."""
+
     """
     Construit une carte fiable des disques physiques -> membres mdadm.
 
@@ -686,7 +621,7 @@ def get_raid_membership_map():
 
             physical = member
 
-            # Si le membre est une partition, retrouve son disque parent.
+            
             rc, parent = run(["lsblk", "-ndo", "PKNAME", member], timeout=8)
             parent = parent.strip().splitlines()[0].strip() if rc == 0 and parent.strip() else ""
 
@@ -709,13 +644,13 @@ def get_raid_membership_map():
     return mapping
 
 
-# BEGINNER: FR — Extrait un vrai chemin /dev/... depuis un texte d'affichage pouvant contenir d'autres informations.
-# BEGINNER: EN — Extracts a real /dev/... path from display text that may contain extra information.
+
+# Extracts a real /dev/... path from display text that may contain extra information.
 def clean_device_path(value):
-    """
-    Extrait uniquement un vrai /dev/... depuis une valeur d'affichage.
-    Exemple: '/dev/sdi1 [/dev/sdi]' -> '/dev/sdi1'
-    """
+
+
+
+
     value = str(value or "").replace("\r", " ").replace("\n", " ").strip()
     m = re.search(r"(/dev/[A-Za-z0-9._+\-]+)", value)
     return m.group(1) if m else ""
@@ -723,16 +658,16 @@ def clean_device_path(value):
 
 
 # =============================================================================
-# MODULE 4 — SMART ET SANTÉ DES DISQUES / MODULE 4 — SMART AND DISK HEALTH
+# MODULE 4 — SMART AND DISK HEALTH
 # =============================================================================
 
-# BEGINNER: FR — Retrouve le disque physique correspondant à un membre RAID avant d'appeler smartctl.
-# BEGINNER: EN — Resolves the physical disk behind a RAID member before calling smartctl.
+
+# Resolves the physical disk behind a RAID member before calling smartctl.
 def resolve_smart_device(member_path):
-    """
-    Résout le disque physique à partir du membre RAID courant.
-    Ne construit jamais /dev/sdX par concaténation de texte d'affichage.
-    """
+
+
+
+
     member = clean_device_path(member_path)
     if not member:
         return "", "Chemin de périphérique invalide."
@@ -740,14 +675,14 @@ def resolve_smart_device(member_path):
     if not Path(member).exists():
         return "", f"Le membre RAID {member} n'existe pas."
 
-    # lsblk donne directement le parent physique.
+    
     rc, out = run(["lsblk", "-ndo", "PKNAME", member], timeout=8)
     parent = out.strip().splitlines()[0].strip() if rc == 0 and out.strip() else ""
 
     if parent:
         physical = clean_device_path(parent if parent.startswith("/dev/") else f"/dev/{parent}")
     else:
-        # Si le membre est déjà un disque entier.
+        
         rc2, typ = run(["lsblk", "-ndo", "TYPE", member], timeout=8)
         physical = member if rc2 == 0 and typ.strip() == "disk" else ""
 
@@ -762,13 +697,13 @@ def resolve_smart_device(member_path):
 
 
 
-# BEGINNER: FR — Détermine si le périphérique est NVMe, SSD ou HDD à l'aide du nom et de lsblk.
-# BEGINNER: EN — Determines whether the device is NVMe, SSD, or HDD using its name and lsblk.
+
+# Determines whether the device is NVMe, SSD, or HDD using its name and lsblk.
 def detect_disk_kind(device_path):
-    """
-    Détermine grossièrement le type :
-      NVMe / SSD SATA / HDD
-    """
+
+
+
+
     device = clean_device_path(device_path)
     if not device:
         return "INCONNU"
@@ -787,27 +722,27 @@ def detect_disk_kind(device_path):
     return "INCONNU"
 
 
-# BEGINNER: FR — Calcule un indice de risque HDD à partir de l'âge et des compteurs SMART; ce n'est pas une durée de vie restante.
-# BEGINNER: EN — Computes an HDD risk index from age and SMART counters; it is not remaining lifetime.
+
+# Computes an HDD risk index from age and SMART counters; it is not remaining lifetime.
 def hdd_risk_index(power_hours, reallocated=None, pending=None,
                    uncorrectable=None, health="INCONNU"):
-    """
-    Indice de risque HDD (0-100), PAS un pourcentage de vie consommée.
 
-    Principe :
-      - âge/heures : contribution modérée, qui augmente surtout après ~5 ans;
-      - secteurs réalloués : pénalité progressive;
-      - secteurs pending : pénalité forte;
-      - secteurs non corrigibles : pénalité très forte;
-      - SMART en échec : risque maximal.
 
-    L'âge seul ne suffit jamais à déclarer un disque défectueux.
-    L'indice sert à classer/prioriser les disques pour surveillance.
-    """
+
+
+
+
+
+
+
+
+
+
+
     score = 0.0
 
-    # Backblaze observe généralement une hausse notable des taux de panne
-    # lorsque les HDD dépassent environ cinq ans de service.
+    
+    
     if isinstance(power_hours, int) and power_hours >= 0:
         years = power_hours / 8760.0
 
@@ -823,12 +758,12 @@ def hdd_risk_index(power_hours, reallocated=None, pending=None,
             age_score = 65.0 + (years - 9.0) * 5.0  # progression lente
         score += min(age_score, 80.0)
 
-    # BEGINNER: FR — Petit helper interne: vérifie qu'une valeur est un entier strictement positif.
-    # BEGINNER: EN — Small internal helper: checks whether a value is a strictly positive integer.
+    
+    # Small internal helper: checks whether a value is a strictly positive integer.
     def positive_int(v):
         return isinstance(v, int) and v > 0
 
-    # SMART : poids volontairement plus élevés que l'âge.
+    
     if positive_int(reallocated):
         score += min(22.0, 7.0 + 5.0 * math.log10(reallocated + 1))
 
@@ -849,17 +784,17 @@ def hdd_risk_index(power_hours, reallocated=None, pending=None,
 
 
 
-# BEGINNER: FR — Retourne l'endurance TBW officielle correspondant à la capacité d'un Samsung 870 EVO.
-# BEGINNER: EN — Returns the official TBW endurance rating matching a Samsung 870 EVO capacity.
+
+# Returns the official TBW endurance rating matching a Samsung 870 EVO capacity.
 def samsung_870_evo_tbw_rating(model, size_bytes):
-    """
-    Endurance officielle Samsung 870 EVO par capacité :
-      250 GB  -> 150 TBW
-      500 GB  -> 300 TBW
-      1 TB    -> 600 TBW
-      2 TB    -> 1200 TBW
-      4 TB    -> 2400 TBW
-    """
+
+
+
+
+
+
+
+
     model_u = (model or "").upper()
     if "SAMSUNG" not in model_u or "870 EVO" not in model_u:
         return None
@@ -877,20 +812,20 @@ def samsung_870_evo_tbw_rating(model, size_bytes):
         4000: 2400,
     }
 
-    # Tolérance sur la capacité commerciale.
+    
     nearest = min(ratings.keys(), key=lambda x: abs(x - gb))
     if abs(nearest - gb) <= max(20, nearest * 0.08):
         return ratings[nearest]
     return None
 
 
-# BEGINNER: FR — Convertit un compteur SMART Total_LBAs_Written en téraoctets décimaux écrits.
-# BEGINNER: EN — Converts a SMART Total_LBAs_Written counter into decimal terabytes written.
+
+# Converts a SMART Total_LBAs_Written counter into decimal terabytes written.
 def total_lbas_written_to_tb(raw_value, sector_size=512):
-    """
-    Convertit Total_LBAs_Written en TB décimaux.
-    Pour les Samsung SATA, l'unité courante est 512 octets par LBA.
-    """
+
+
+
+
     try:
         raw = int(raw_value)
         if raw < 0:
@@ -900,12 +835,12 @@ def total_lbas_written_to_tb(raw_value, sector_size=512):
         return None
 
 
-# BEGINNER: FR — Centralise l'analyse SMART SATA/NVMe et retourne santé, erreurs, température, heures et usure/risque.
-# BEGINNER: EN — Centralizes SATA/NVMe SMART analysis and returns health, errors, temperature, hours, and wear/risk.
+
+# Centralizes SATA/NVMe SMART analysis and returns health, errors, temperature, hours, and wear/risk.
 def smart_usage_metrics(device_path):
-    """
-    Lit les principaux compteurs SMART pour SATA/ATA et NVMe.
-    """
+
+
+
     result = {
         "reallocated": None,
         "pending": None,
@@ -1004,10 +939,10 @@ def smart_usage_metrics(device_path):
         result["percentage_used"] = nvme_int("Percentage Used")
         result["power_cycle_count"] = nvme_int("Power Cycles")
 
-        # FR — NVMe expose souvent "Data Units Written". Selon la norme NVMe,
-        #      une unité représente 1000 blocs de 512 octets, soit 512 000 octets.
-        #      On peut donc afficher les TB écrits même sans connaître le TBW constructeur.
-        # EN — NVMe commonly exposes "Data Units Written". Per NVMe, one unit is
+        
+        
+        
+        # NVMe commonly exposes "Data Units Written". Per NVMe, one unit is
         #      1000 × 512-byte blocks = 512,000 bytes, so written TB can be shown
         #      even when the manufacturer's TBW rating is unknown.
         data_units_written = nvme_int("Data Units Written")
@@ -1068,8 +1003,8 @@ def smart_usage_metrics(device_path):
                 except ValueError:
                     pass
 
-    # BEGINNER: FR — Helper interne qui retourne le premier attribut SMART disponible parmi plusieurs noms possibles.
-    # BEGINNER: EN — Internal helper returning the first available SMART attribute among several possible names.
+    
+    # Internal helper returning the first available SMART attribute among several possible names.
     def first_value(*names):
         for name in names:
             if name in values:
@@ -1091,17 +1026,17 @@ def smart_usage_metrics(device_path):
     result["total_lbas_written"] = first_value("Total_LBAs_Written", "Total_LBA_Written")
     result["total_lbas_read"] = first_value("Total_LBAs_Read", "Total_LBA_Read")
 
-    # Extraire aussi Min/Max quand smartctl les imprime dans RAW_VALUE.
+    
     tm = re.search(r"(?:Temperature_Celsius|Airflow_Temperature_Cel).*?\b(\d+)\s+\(Min/Max\s+(\d+)/(\d+)\)", out, re.I)
     if tm:
         result["temperature_min"] = int(tm.group(2))
         result["temperature_max"] = int(tm.group(3))
 
-    # Même sur HDD, Total_LBAs_Written peut être informatif. Ce n'est PAS du TBW.
+    
     if isinstance(result["total_lbas_written"], int):
         result["tb_written"] = total_lbas_written_to_tb(result["total_lbas_written"])
 
-    # SSD SATA : essayer d'abord de récupérer un compteur d'écriture hôte.
+    
     if result.get("disk_kind") == "SSD":
         lbas_written = first_value(
             "Total_LBAs_Written",
@@ -1120,8 +1055,8 @@ def smart_usage_metrics(device_path):
         if tb_written is not None:
             result["tb_written"] = tb_written
 
-        # Samsung 870 EVO : le TBW constructeur est connu, donc on peut calculer
-        # précisément le pourcentage d'endurance consommé/restant.
+        
+        
         rating = samsung_870_evo_tbw_rating(model, size_bytes)
 
         if rating is not None and tb_written is not None:
@@ -1139,7 +1074,7 @@ def smart_usage_metrics(device_path):
             )
             result["index_kind"] = "wear"
 
-    # SSD SATA : essayer les attributs d'endurance courants.
+    
     if result.get("disk_kind") == "SSD":
         life_left = first_value(
             "SSD_Life_Left",
@@ -1152,12 +1087,12 @@ def smart_usage_metrics(device_path):
         )
 
         if result.get("wear_percent") is None and isinstance(life_left, int):
-            # Certains SSD donnent 100 = neuf, 0 = usé.
+            
             result["wear_percent"] = max(0.0, min(100.0, 100.0 - float(life_left)))
             result["wear_source"] = "SMART SSD Life Left"
             result["index_kind"] = "wear"
         elif result.get("wear_percent") is None and isinstance(percent_used, int):
-            # Certains contrôleurs donnent directement un indicateur d'usure.
+            
             result["wear_percent"] = max(0.0, min(100.0, float(percent_used)))
             result["wear_source"] = "SMART SSD Wear"
             result["index_kind"] = "wear"
@@ -1176,7 +1111,7 @@ def smart_usage_metrics(device_path):
     if isinstance(result["power_hours"], int):
         result["power_days"] = result["power_hours"] / 24.0
 
-    # HDD : indice de RISQUE, pas pourcentage d'usure.
+    
     if result.get("disk_kind") == "HDD":
         result["wear_percent"] = hdd_risk_index(
             result.get("power_hours"),
@@ -1196,14 +1131,14 @@ def smart_usage_metrics(device_path):
     return result
 
 
-# BEGINNER: FR — À partir d'un disque ou d'une partition, récupère le disque physique, sa taille, son modèle et son numéro de série.
-# BEGINNER: EN — From a disk or partition, retrieves the physical disk, size, model, and serial number.
+
+# From a disk or partition, retrieves the physical disk, size, model, and serial number.
 def physical_disk_info(path):
-    """
-    Retourne modèle/série/taille du disque physique qui contient `path`.
-    Exemple : /dev/sdb1 -> /dev/sdb.
-    Pour un disque entier, conserve /dev/sdb.
-    """
+
+
+
+
+
     result = {
         "member_path": path,
         "physical_path": path,
@@ -1215,7 +1150,7 @@ def physical_disk_info(path):
     if not path or not path.startswith("/dev/"):
         return result
 
-    # Détermine le disque parent physique avec lsblk.
+    
     rc, out = run([
         "lsblk", "-J", "-b",
         "-o", "PATH,PKNAME,TYPE,SIZE,MODEL,SERIAL",
@@ -1246,7 +1181,7 @@ def physical_disk_info(path):
                         parent
                     ], timeout=10)
                     if rc2 == 0 and out2.strip():
-                        # MODEL peut contenir des espaces : récupérer plus sûrement via udev ensuite.
+                        
                         rcj, outj = run([
                             "lsblk", "-J", "-dn", "-b",
                             "-o", "PATH,SIZE,MODEL,SERIAL",
@@ -1263,7 +1198,7 @@ def physical_disk_info(path):
         except Exception:
             pass
 
-    # Fallback udevadm, très utile lorsque lsblk n'expose pas MODEL/SERIAL.
+    
     physical = result["physical_path"]
     if shutil.which("udevadm") and physical:
         rc, props = run(["udevadm", "info", "--query=property", "--name", physical], timeout=10)
@@ -1293,7 +1228,7 @@ def physical_disk_info(path):
     # Dernier fallback : smartctl -i.
     if shutil.which("smartctl") and physical and (not result["model"] or not result["serial"]):
         rc, smart = run(["smartctl", "-i", physical], timeout=15)
-        if rc in (0, 2):  # smartctl peut renvoyer des bits d'état malgré une sortie exploitable
+        if rc in (0, 2):  
             for line in smart.splitlines():
                 low = line.lower()
                 if not result["model"] and (
@@ -1308,10 +1243,10 @@ def physical_disk_info(path):
     return result
 
 
-# BEGINNER: FR — Retourne les métadonnées lsblk d'un périphérique bloc précis sous forme de dictionnaire.
-# BEGINNER: EN — Returns lsblk metadata for one block device as a dictionary.
+
+# Returns lsblk metadata for one block device as a dictionary.
 def block_device_info(path):
-    """Retourne les infos lsblk d'un périphérique précis."""
+
     rc, out = run([
         "lsblk", "-J", "-b",
         "-o", "NAME,PATH,TYPE,SIZE,MODEL,SERIAL,FSTYPE,LABEL,UUID,MOUNTPOINTS",
@@ -1341,14 +1276,14 @@ def block_device_info(path):
         return {}
 
 
-# BEGINNER: FR — Analyse la sortie de 'mdadm --detail' pour obtenir slot, état et périphérique de chaque membre.
-# BEGINNER: EN — Parses 'mdadm --detail' output to obtain slot, state, and device for each member.
+
+# Parses 'mdadm --detail' output to obtain slot, state, and device for each member.
 def parse_mdadm_members(array_path):
-    """
-    Parse le tableau des membres de `mdadm --detail`.
-    Retourne une liste de dicts :
-      device, slot, state, problem, warning
-    """
+
+
+
+
+
     rc, detail = run(["mdadm", "--detail", array_path], timeout=15)
     if rc != 0:
         return [], detail
@@ -1370,14 +1305,14 @@ def parse_mdadm_members(array_path):
         if not in_table:
             continue
 
-        # Ligne typique :
+        
         # 0  8  17  0  active sync set-A  /dev/sdb1
         # -  0   0  1  removed
         parts = line.split()
         if len(parts) < 5:
             continue
 
-        # Les 4 premiers champs sont normalement Number/Major/Minor/RaidDevice.
+        
         try:
             slot = parts[3]
         except Exception:
@@ -1419,7 +1354,7 @@ def parse_mdadm_members(array_path):
             "warning": warning,
         })
 
-    # Fallback via /sys si le tableau n'a pas été reconnu.
+    
     if not members:
         mdname = Path(array_path).name
         slaves = Path(f"/sys/block/{mdname}/slaves")
@@ -1436,10 +1371,10 @@ def parse_mdadm_members(array_path):
     return members, detail
 
 
-# BEGINNER: FR — Liste les périphériques pouvant être proposés comme candidats lors d'un remplacement de membre RAID.
-# BEGINNER: EN — Lists devices that can be offered as candidates when replacing a RAID member.
+
+# Lists devices that can be offered as candidates when replacing a RAID member.
 def get_candidate_replacement_devices(exclude=None):
-    """Liste les disques/partitions utilisables comme candidats de remplacement."""
+
     exclude = set(exclude or [])
     devices = get_block_devices()
     candidates = []
@@ -1467,13 +1402,13 @@ def get_candidate_replacement_devices(exclude=None):
     return candidates
 
 
-# BEGINNER: FR — Rassemble système de fichiers, UUID, montage et espace utilisé/libre d'un RAID.
-# BEGINNER: EN — Collects filesystem, UUID, mount, and used/free space information for an array.
+
+# Collects filesystem, UUID, mount, and used/free space information for an array.
 def get_array_mount_info(array_path):
-    """
-    Retourne les informations de montage du périphérique md :
-    fs, label, uuid, mountpoints, source montée, taille/utilisé/libre.
-    """
+
+
+
+
     info = {
         "fstype": "",
         "label": "",
@@ -1510,7 +1445,7 @@ def get_array_mount_info(array_path):
         except Exception:
             pass
 
-    # Si le filesystem est sur une partition enfant (ex: /dev/md10p1), cherche-la.
+    
     if not info["mountpoints"]:
         rc, out = run([
             "lsblk", "-J", "-o",
@@ -1522,8 +1457,8 @@ def get_array_mount_info(array_path):
             try:
                 data = json.loads(out)
 
-                # BEGINNER: FR — Parcourt récursivement l'arbre JSON de lsblk afin de ne manquer aucune partition/enfant.
-                # BEGINNER: EN — Recursively walks the lsblk JSON tree so no child partition/device is missed.
+                
+                # Recursively walks the lsblk JSON tree so no child partition/device is missed.
                 def walk(nodes):
                     for n in nodes:
                         mounts = n.get("mountpoints") or []
@@ -1546,7 +1481,7 @@ def get_array_mount_info(array_path):
             except Exception:
                 pass
 
-    # df fournit l'espace utilisé/libre du volume monté.
+    
     if info["mountpoints"]:
         mountpoint = info["mountpoints"][0]
         rc, out = run([
@@ -1570,17 +1505,17 @@ def get_array_mount_info(array_path):
 
 
 # =============================================================================
-# MODULE 5 — PROTECTIONS FSTAB / RAID / SUPERBLOCK / MODULE 5 — FSTAB / RAID / SUPERBLOCK SAFETY
-# BEGINNER: FR — IMPORTANT SÉCURITÉ : les fonctions de ce module sont la barrière
-# BEGINNER: FR — principale contre l'effacement accidentel d'un disque membre RAID ou fstab.
-# BEGINNER: EN — IMPORTANT SAFETY: functions in this module are the main barrier
-# BEGINNER: EN — against accidentally erasing a RAID member or an fstab-referenced disk.
+# MODULE 5 — FSTAB / RAID / SUPERBLOCK SAFETY
+
+
+# IMPORTANT SAFETY: functions in this module are the main barrier
+# against accidentally erasing a RAID member or an fstab-referenced disk.
 # =============================================================================
 
-# BEGINNER: FR — Transforme une source fstab (/dev, UUID, LABEL...) en périphérique(s) /dev réels.
-# BEGINNER: EN — Resolves an fstab source (/dev, UUID, LABEL...) into real /dev device path(s).
+
+# Resolves an fstab source (/dev, UUID, LABEL...) into real /dev device path(s).
 def resolve_fstab_source(source):
-    """Résout une source /etc/fstab locale vers un ou plusieurs /dev/..."""
+
     source = (source or "").strip()
     if not source:
         return []
@@ -1619,13 +1554,13 @@ def resolve_fstab_source(source):
     return []
 
 
-# BEGINNER: FR — Lit les lignes actives de /etc/fstab et construit une liste exploitable par les protections.
-# BEGINNER: EN — Reads active /etc/fstab lines and builds a list used by safety checks.
+
+# Reads active /etc/fstab lines and builds a list used by safety checks.
 def get_fstab_entries():
-    """
-    Lit uniquement les lignes ACTIVES de /etc/fstab.
-    Les lignes commençant par # ou ## sont ignorées.
-    """
+
+
+
+
     path = Path("/etc/fstab")
     if not path.exists():
         return []
@@ -1671,13 +1606,13 @@ def get_fstab_entries():
     return entries
 
 
-# BEGINNER: FR — Retourne un disque et tous ses enfants afin de protéger aussi ses partitions.
-# BEGINNER: EN — Returns a disk and all its children so its partitions are protected as well.
+
+# Returns a disk and all its children so its partitions are protected as well.
 def device_family_paths(device_path):
-    """
-    Retourne le disque demandé et ses partitions/enfants bloc.
-    Ex: /dev/sda -> /dev/sda, /dev/sda1, /dev/sda2...
-    """
+
+
+
+
     dev = clean_device_path(device_path)
     if not dev:
         return set()
@@ -1703,10 +1638,10 @@ def device_family_paths(device_path):
     return paths
 
 
-# BEGINNER: FR — Cherche si le disque ou l'une de ses partitions est référencé dans fstab.
-# BEGINNER: EN — Checks whether the disk or one of its partitions is referenced by fstab.
+
+# Checks whether the disk or one of its partitions is referenced by fstab.
 def fstab_protection_entries(device_path, cached_entries=None):
-    """Retourne les entrées fstab actives concernant le disque ou ses partitions."""
+
     family = device_family_paths(device_path)
     if not family:
         return []
@@ -1726,8 +1661,8 @@ def fstab_protection_entries(device_path, cached_entries=None):
     return result
 
 
-# BEGINNER: FR — Construit le message qui explique pourquoi une opération destructive est bloquée par fstab.
-# BEGINNER: EN — Builds the message explaining why a destructive operation is blocked by fstab.
+
+# Builds the message explaining why a destructive operation is blocked by fstab.
 def protected_fstab_message(device_path):
     entries = fstab_protection_entries(device_path)
     if not entries:
@@ -1749,12 +1684,12 @@ def protected_fstab_message(device_path):
     )
 
 
-# BEGINNER: FR — Vérifie si un périphérique appartient déjà à un RAID mdadm actif.
-# BEGINNER: EN — Checks whether a device already belongs to an active mdadm array.
+
+# Checks whether a device already belongs to an active mdadm array.
 def raid_protection_memberships(device_path):
-    """
-    Retourne les appartenances RAID mdadm détectées pour un disque ou une partition.
-    """
+
+
+
     dev = clean_device_path(device_path)
     if not dev:
         return []
@@ -1787,8 +1722,8 @@ def raid_protection_memberships(device_path):
     return unique
 
 
-# BEGINNER: FR — Construit le message de blocage lorsqu'un périphérique est déjà membre d'un RAID.
-# BEGINNER: EN — Builds the blocking message when a device is already a RAID member.
+
+# Builds the blocking message when a device is already a RAID member.
 def protected_raid_message(device_path):
     entries = raid_protection_memberships(device_path)
     if not entries:
@@ -1811,10 +1746,10 @@ def protected_raid_message(device_path):
     )
 
 
-# BEGINNER: FR — Analyse les métadonnées mdadm présentes sur un disque sans rien écrire.
-# BEGINNER: EN — Examines mdadm metadata present on a device without writing anything.
+
+# Examines mdadm metadata present on a device without writing anything.
 def mdadm_examine_superblock(device_path):
-    """Analyse les métadonnées mdadm sans écrire sur le disque."""
+
     dev = clean_device_path(device_path)
     if not dev:
         return False, ""
@@ -1834,10 +1769,10 @@ def mdadm_examine_superblock(device_path):
     return found, out or ""
 
 
-# BEGINNER: FR — Retourne le disque brut et ses partitions qui pourraient contenir un ancien superblock.
-# BEGINNER: EN — Returns the raw disk and partitions that may contain an old superblock.
+
+# Returns the raw disk and partitions that may contain an old superblock.
 def candidate_member_paths_for_cleanup(disk_path):
-    """Retourne disque brut + partitions pouvant porter un ancien superblock."""
+
     dev = clean_device_path(disk_path)
     if not dev:
         return []
@@ -1866,12 +1801,12 @@ def candidate_member_paths_for_cleanup(disk_path):
     return result
 
 
-# BEGINNER: FR — Identifie uniquement les anciens superblocks pouvant être effacés sans toucher à un RAID/FSTAB protégé.
-# BEGINNER: EN — Finds only old superblocks that can be cleared without touching protected RAID/FSTAB devices.
+
+# Finds only old superblocks that can be cleared without touching protected RAID/FSTAB devices.
 def safe_orphan_superblocks(disk_paths):
-    """
-    Retourne uniquement les superblocks orphelins non protégés RAID/FSTAB.
-    """
+
+
+
     found = []
     protected = []
 
@@ -1905,20 +1840,20 @@ def safe_orphan_superblocks(disk_paths):
 
 
 # =============================================================================
-# MODULE 6 — INFRASTRUCTURE INTERFACE GRAPHIQUE / MODULE 6 — GUI INFRASTRUCTURE
+# MODULE 6 — GUI INFRASTRUCTURE
 # =============================================================================
 
-# BEGINNER: FR — Installe des crochets Tkinter qui traduisent automatiquement plusieurs textes lors de leur création/modification.
-# BEGINNER: EN — Installs Tkinter hooks that automatically translate many texts when widgets are created/updated.
+
+# Installs Tkinter hooks that automatically translate many texts when widgets are created/updated.
 def install_tk_translation_hooks():
     if getattr(tk, "_mdadm_i18n_installed", False):
         return
     tk._mdadm_i18n_installed = True
 
-    # v1.31: traduit aussi les textes portés par StringVar, y compris lors des mises à jour.
+    
     original_stringvar_init = tk.StringVar.__init__
-    # BEGINNER: FR — Intercepte la création d'un StringVar pour traduire sa valeur initiale.
-    # BEGINNER: EN — Intercepts StringVar creation to translate its initial value.
+    
+    # Intercepts StringVar creation to translate its initial value.
     def translated_stringvar_init(self, *args, **kwargs):
         if "value" in kwargs and isinstance(kwargs["value"], str):
             kwargs["value"] = ui_text(kwargs["value"])
@@ -1926,8 +1861,8 @@ def install_tk_translation_hooks():
     tk.StringVar.__init__ = translated_stringvar_init
 
     original_stringvar_set = tk.StringVar.set
-    # BEGINNER: FR — Intercepte StringVar.set() pour traduire les valeurs d'affichage dynamiques.
-    # BEGINNER: EN — Intercepts StringVar.set() to translate dynamic display values.
+    
+    # Intercepts StringVar.set() to translate dynamic display values.
     def translated_stringvar_set(self, value):
         return original_stringvar_set(self, ui_text(value) if isinstance(value, str) else value)
     tk.StringVar.set = translated_stringvar_set
@@ -1973,8 +1908,8 @@ def install_tk_translation_hooks():
             setattr(messagebox, name, make_msg(original))
 
     original_heading = ttk.Treeview.heading
-    # BEGINNER: FR — Intercepte les titres de colonnes ttk.Treeview afin de les traduire.
-    # BEGINNER: EN — Intercepts ttk.Treeview column headings so they are translated.
+    
+    # Intercepts ttk.Treeview column headings so they are translated.
     def translated_heading(self, column, option=None, **kw):
         if "text" in kw:
             kw["text"] = ui_text(kw["text"])
@@ -1982,8 +1917,8 @@ def install_tk_translation_hooks():
     ttk.Treeview.heading = translated_heading
 
     original_add = ttk.Notebook.add
-    # BEGINNER: FR — Intercepte l'ajout d'onglets ttk.Notebook pour traduire leur titre.
-    # BEGINNER: EN — Intercepts ttk.Notebook tab insertion to translate tab titles.
+    
+    # Intercepts ttk.Notebook tab insertion to translate tab titles.
     def translated_add(self, child, **kw):
         if "text" in kw:
             kw["text"] = ui_text(kw["text"])
@@ -1993,8 +1928,8 @@ def install_tk_translation_hooks():
 install_tk_translation_hooks()
 
 
-# BEGINNER: FR — Fenêtre de confirmation réutilisable pour les actions sensibles/destructives.
-# BEGINNER: EN — Reusable confirmation window for sensitive/destructive actions.
+
+# Reusable confirmation window for sensitive/destructive actions.
 class ConfirmDialog(tk.Toplevel):
     def __init__(self, parent, title, text, confirm_token=None):
         super().__init__(parent)
@@ -2047,13 +1982,13 @@ class ConfirmDialog(tk.Toplevel):
 
 
 # =============================================================================
-# MODULE 7 — ASSISTANT DE CRÉATION RAID / MODULE 7 — RAID CREATION WIZARD
+# MODULE 7 — RAID CREATION WIZARD
 # =============================================================================
 
-# BEGINNER: FR — Assistant en plusieurs étapes qui analyse les disques, valide les choix et prépare la création d'un RAID.
-# BEGINNER: EN — Multi-step wizard that analyzes disks, validates choices, and prepares RAID creation.
+
+# Multi-step wizard that analyzes disks, validates choices, and prepares RAID creation.
 class RaidCreationWizard(tk.Toplevel):
-    """Assistant convivial de création d'un RAID mdadm."""
+
 
     LEVEL_INFO = {
         "raid0": {
@@ -2106,7 +2041,7 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # INITIALISATION DE L'ASSISTANT / WIZARD INITIALIZATION
+    
     # -------------------------------------------------------------------------
 
     def __init__(self, parent):
@@ -2175,8 +2110,8 @@ class RaidCreationWizard(tk.Toplevel):
 
         self.show_step(0)
 
-    # BEGINNER: FR — Crée une page vide standard de l'assistant afin que chaque étape ait la même structure.
-    # BEGINNER: EN — Creates a standard empty wizard page so every step shares the same structure.
+    
+    # Creates a standard empty wizard page so every step shares the same structure.
     def _new_page(self):
         page = ttk.Frame(self.body)
         page.grid(row=0, column=0, sticky="nsew")
@@ -2187,11 +2122,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # ÉTAPE 1 — CHOIX DU NIVEAU RAID / STEP 1 — RAID LEVEL
+    # STEP 1 — RAID LEVEL
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'étape 1: choix du niveau RAID et affichage des possibilités selon les disques disponibles.
-    # BEGINNER: EN — Builds step 1: RAID level selection and availability based on usable disks.
+    
+    # Builds step 1: RAID level selection and availability based on usable disks.
     def _build_page_level(self):
         page = self._new_page()
 
@@ -2258,11 +2193,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # ÉTAPE 2 — SÉLECTION DES DISQUES / STEP 2 — DISK SELECTION
+    # STEP 2 — DISK SELECTION
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'étape 2: tableau de sélection des disques et informations SMART/protection.
-    # BEGINNER: EN — Builds step 2: disk selection table plus SMART/safety information.
+    
+    # Builds step 2: disk selection table plus SMART/safety information.
     def _build_page_disks(self):
         page = self._new_page()
         page.rowconfigure(1, weight=1)
@@ -2365,11 +2300,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # ÉTAPE 3 — OPTIONS RAID / STEP 3 — RAID OPTIONS
+    # STEP 3 — RAID OPTIONS
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'étape 3: nom, métadonnées, bitmap et autres options de création.
-    # BEGINNER: EN — Builds step 3: name, metadata, bitmap, and other creation options.
+    
+    # Builds step 3: name, metadata, bitmap, and other creation options.
     def _build_page_options(self):
         page = self._new_page()
         box = ttk.Frame(page, padding=16)
@@ -2437,11 +2372,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # ÉTAPE 4 — VÉRIFICATION FINALE / STEP 4 — FINAL REVIEW
+    # STEP 4 — FINAL REVIEW
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'étape 4: résumé final et commande qui sera exécutée.
-    # BEGINNER: EN — Builds step 4: final summary and command that will be executed.
+    
+    # Builds step 4: final summary and command that will be executed.
     def _build_page_review(self):
         page = self._new_page()
         page.rowconfigure(1, weight=1)
@@ -2467,19 +2402,19 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # ANALYSE DE DISPONIBILITÉ ET PROTECTIONS / AVAILABILITY AND SAFETY ANALYSIS
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Analyse les disques du système et classe ceux qui sont libres, protégés ou occupés.
-    # BEGINNER: EN — Analyzes system disks and classifies them as free, protected, or in use.
+    
+    # Analyzes system disks and classifies them as free, protected, or in use.
     def analyze_free_disks(self):
-        """
-        Compte les disques réellement disponibles pour un nouveau RAID.
-        RAID existant et FSTAB sont des protections absolues.
-        Les disques avec FS/montage sont considérés occupés dans le calcul
-        normal, même si le mode avancé peut ensuite les autoriser.
-        Aucun smartctl n'est lancé ici afin de garder l'assistant réactif.
-        """
+
+
+
+
+
+
+
         devices = get_block_devices()
         membership = get_raid_membership_map()
         fstab_entries_cache = get_fstab_entries()
@@ -2530,9 +2465,9 @@ class RaidCreationWizard(tk.Toplevel):
                     mount_found = True
 
             # IMPORTANT : aucune interrogation SMART ici.
-            # La première page doit seulement compter rapidement les disques
-            # selon lsblk + mdadm + fstab. SMART sera affiché/analyse plus tard
-            # dans la page détaillée des disques.
+            
+            
+            
             smart_bad = False
 
             if raid_locked:
@@ -2551,8 +2486,8 @@ class RaidCreationWizard(tk.Toplevel):
 
         return stats
 
-    # BEGINNER: FR — Active/grise les niveaux RAID selon le nombre de disques réellement disponibles.
-    # BEGINNER: EN — Enables/disables RAID levels according to the number of truly available disks.
+    
+    # Enables/disables RAID levels according to the number of truly available disks.
     def refresh_level_availability(self):
         try:
             stats = self.analyze_free_disks()
@@ -2612,8 +2547,8 @@ class RaidCreationWizard(tk.Toplevel):
         else:
             self.update_level_details()
 
-    # BEGINNER: FR — Actualise l'explication du niveau RAID choisi.
-    # BEGINNER: EN — Updates the explanation for the selected RAID level.
+    
+    # Updates the explanation for the selected RAID level.
     def update_level_details(self):
         level = self.level_var.get()
         if not level or level not in self.LEVEL_INFO:
@@ -2629,8 +2564,8 @@ class RaidCreationWizard(tk.Toplevel):
             f'Minimum : {info["min"]} disques')
         )
 
-    # BEGINNER: FR — Réagit à l'option avancée permettant d'afficher aussi les disques occupés.
-    # BEGINNER: EN — Handles the advanced option that also shows disks currently in use.
+    
+    # Handles the advanced option that also shows disks currently in use.
     def on_allow_used_change(self):
         self.on_disk_selection()
 
@@ -2657,9 +2592,9 @@ class RaidCreationWizard(tk.Toplevel):
                 size_bytes = 0
             size_txt = self.parent.human_size(size_bytes)
 
-            # Ne bloque pas l'interface avec smartctl pour chaque disque.
-            # On utilise uniquement le cache SMART déjà disponible. L'analyse
-            # complète est lancée à la demande avec le bouton SMART.
+            
+            
+            
             cached = self.parent.smart_cache.get(path)
             metrics = {}
             if cached:
@@ -2808,8 +2743,8 @@ class RaidCreationWizard(tk.Toplevel):
 
         self.on_disk_selection()
 
-    # BEGINNER: FR — Ouvre les informations SMART du disque sélectionné dans l'assistant.
-    # BEGINNER: EN — Opens SMART information for the disk selected in the wizard.
+    
+    # Opens SMART information for the disk selected in the wizard.
     def show_selected_smart(self):
         sel = self.disk_tree.selection()
         if len(sel) != 1:
@@ -2823,19 +2758,19 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # SÉLECTION / CAPACITÉ / VALIDATION / SELECTION / CAPACITY / VALIDATION
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Retourne uniquement les chemins /dev des disques cochés/sélectionnés.
-    # BEGINNER: EN — Returns only /dev paths for selected disks.
+    
+    # Returns only /dev paths for selected disks.
     def selected_disk_paths(self):
         return [p for p in self.disk_tree.selection() if p in self.disk_records]
 
     def on_disk_selection(self, _event=None):
         selected = self.selected_disk_paths()
 
-        # Protection absolue : un membre d'un RAID existant ne peut jamais
-        # être sélectionné dans l'assistant de création.
+        
+        
         hard_locked = [
             p for p in selected
             if (
@@ -2849,8 +2784,8 @@ class RaidCreationWizard(tk.Toplevel):
         if hard_locked:
             selected = self.selected_disk_paths()
 
-        # Le mode avancé ne concerne que les autres disques utilisés
-        # (FS/montage non-fstab). Il ne désactive jamais RAID ni FSTAB.
+        
+        
         if not self.allow_used_var.get():
             invalid = [
                 p for p in selected
@@ -2864,8 +2799,8 @@ class RaidCreationWizard(tk.Toplevel):
         self.selected_paths = selected
         self.update_disk_summary()
 
-    # BEGINNER: FR — Estime la capacité utile du futur RAID en fonction du niveau et du plus petit disque.
-    # BEGINNER: EN — Estimates usable array capacity from RAID level and the smallest disk.
+    
+    # Estimates usable array capacity from RAID level and the smallest disk.
     def estimated_capacity_bytes(self):
         selected = self.selected_disk_paths()
         if not selected:
@@ -2895,8 +2830,8 @@ class RaidCreationWizard(tk.Toplevel):
             return smallest * (n // 2)
         return 0
 
-    # BEGINNER: FR — Met à jour le résumé visuel des disques choisis.
-    # BEGINNER: EN — Updates the visual summary of selected disks.
+    
+    # Updates the visual summary of selected disks.
     def update_disk_summary(self):
         selected = self.selected_disk_paths()
         level = self.level_var.get()
@@ -2925,8 +2860,8 @@ class RaidCreationWizard(tk.Toplevel):
             f"{info['faults']}.{suffix}"
         )
 
-    # BEGINNER: FR — Valide le nombre, l'état et la sécurité des disques avant de continuer.
-    # BEGINNER: EN — Validates disk count, state, and safety before continuing.
+    
+    # Validates disk count, state, and safety before continuing.
     def validate_disks(self):
         selected = self.selected_disk_paths()
         level = self.level_var.get()
@@ -3012,8 +2947,8 @@ class RaidCreationWizard(tk.Toplevel):
 
         return True
 
-    # BEGINNER: FR — Valide les paramètres de création avant l'étape finale.
-    # BEGINNER: EN — Validates creation options before the final step.
+    
+    # Validates creation options before the final step.
     def validate_options(self):
         name = self.name_var.get().strip()
         if not re.fullmatch(r"md\d+", name):
@@ -3036,11 +2971,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # CONSTRUCTION DE LA COMMANDE MDADM / MDADM COMMAND BUILDING
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit la liste d'arguments de la commande mdadm --create sans encore l'exécuter.
-    # BEGINNER: EN — Builds the mdadm --create argument list without executing it yet.
+    
+    # Builds the mdadm --create argument list without executing it yet.
     def build_cmd(self):
         selected = self.selected_disk_paths()
         level = self.level_var.get()
@@ -3059,8 +2994,8 @@ class RaidCreationWizard(tk.Toplevel):
         cmd.extend(selected)
         return cmd
 
-    # BEGINNER: FR — Met à jour le texte récapitulatif des options choisies.
-    # BEGINNER: EN — Updates the summary text for selected options.
+    
+    # Updates the summary text for selected options.
     def update_options_summary(self):
         level = self.level_var.get()
         selected = self.selected_disk_paths()
@@ -3078,8 +3013,8 @@ class RaidCreationWizard(tk.Toplevel):
             f"Bitmap interne : {'Oui' if self.bitmap_var.get() and level != 'raid0' else 'Non'}"
         )
 
-    # BEGINNER: FR — Prépare le résumé final de l'assistant avec disques, capacité et commande.
-    # BEGINNER: EN — Prepares the wizard's final review with disks, capacity, and command.
+    
+    # Prepares the wizard's final review with disks, capacity, and command.
     def populate_review(self):
         level = self.level_var.get()
         info = self.LEVEL_INFO[level]
@@ -3127,8 +3062,8 @@ class RaidCreationWizard(tk.Toplevel):
         self.review_text.delete("1.0", "end")
         self.review_text.insert("1.0", "\n".join(lines))
 
-    # BEGINNER: FR — Affiche une étape précise de l'assistant et cache les autres.
-    # BEGINNER: EN — Shows one wizard step and hides the others.
+    
+    # Shows one wizard step and hides the others.
     def show_step(self, step):
         self.step = step
         titles = [
@@ -3157,8 +3092,8 @@ class RaidCreationWizard(tk.Toplevel):
         else:
             self.next_btn.configure(text=tr("next"), command=self.next_step)
 
-    # BEGINNER: FR — Valide l'étape courante puis avance seulement si tout est acceptable.
-    # BEGINNER: EN — Validates the current step and advances only when everything is acceptable.
+    
+    # Validates the current step and advances only when everything is acceptable.
     def next_step(self):
         if self.step == 0:
             level = self.level_var.get()
@@ -3195,30 +3130,30 @@ class RaidCreationWizard(tk.Toplevel):
                 return
             self.show_step(3)
 
-    # BEGINNER: FR — Revient à l'étape précédente sans modifier les disques.
-    # BEGINNER: EN — Returns to the previous step without modifying disks.
+    
+    # Returns to the previous step without modifying disks.
     def prev_step(self):
         if self.step > 0:
             self.show_step(self.step - 1)
 
 
     # -------------------------------------------------------------------------
-    # NETTOYAGE SÉCURISÉ DES ANCIENS SUPERBLOCKS / SAFE OLD SUPERBLOCK CLEANUP
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Prépare de façon contrôlée les disques sélectionnés juste avant la création.
-    # BEGINNER: EN — Safely prepares selected disks immediately before creation.
+    
+    # Safely prepares selected disks immediately before creation.
     def prepare_selected_disks(self):
-        """
-        Étape de préparation : détecte les anciens superblocks mdadm orphelins
-        et demande explicitement avant de les effacer.
-        """
+
+
+
+
         disks = self.selected_disk_paths()
         orphaned, protected = safe_orphan_superblocks(disks)
 
         if protected:
-            # Normalement impossible grâce aux gardes précédentes, mais on
-            # refuse si l'état a changé entre-temps.
+            
+            
             devices = "\n".join(sorted({p for p, _msg in protected}))
             messagebox.showerror(
                 "PROTECTION RAID / FSTAB",
@@ -3262,13 +3197,13 @@ class RaidCreationWizard(tk.Toplevel):
             msg,
             parent=self
         ):
-            # L'utilisateur peut continuer sans effacer : mdadm décidera ensuite.
+            
             return True
 
         for item in orphaned:
             dev = item["device"]
 
-            # Double garde immédiatement avant chaque écriture.
+            
             raid_guard = protected_raid_message(dev)
             fstab_guard = protected_fstab_message(dev)
             if raid_guard or fstab_guard:
@@ -3302,11 +3237,11 @@ class RaidCreationWizard(tk.Toplevel):
 
 
     # -------------------------------------------------------------------------
-    # CRÉATION FINALE DU RAID / FINAL RAID CREATION
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Dernière étape: reconfirme, exécute la création et rafraîchit l'application.
-    # BEGINNER: EN — Final step: reconfirms, executes creation, and refreshes the application.
+    
+    # Final step: reconfirms, executes creation, and refreshes the application.
     def finish(self):
         if not self.validate_disks() or not self.validate_options():
             return
@@ -3334,9 +3269,9 @@ class RaidCreationWizard(tk.Toplevel):
         if not dlg.result:
             return
 
-        # Étape de préparation sécurisée : analyse mdadm --examine et
-        # proposition de --zero-superblock uniquement pour les métadonnées
-        # orphelines, jamais pour un membre RAID/FSTAB protégé.
+        
+        
+        
         if not self.prepare_selected_disks():
             return
 
@@ -3352,15 +3287,15 @@ class RaidCreationWizard(tk.Toplevel):
 
 
 # =============================================================================
-# MODULE 8 — APPLICATION PRINCIPALE / MODULE 8 — MAIN APPLICATION
+# MODULE 8 — MAIN APPLICATION
 # =============================================================================
 
-# BEGINNER: FR — Fenêtre principale: construit les onglets, rafraîchit les données et orchestre toutes les actions mdadm.
-# BEGINNER: EN — Main window: builds tabs, refreshes data, and coordinates all mdadm actions.
+
+# Main window: builds tabs, refreshes data, and coordinates all mdadm actions.
 class MdadmManager(tk.Tk):
 
     # -------------------------------------------------------------------------
-    # INITIALISATION DE L'APPLICATION / APPLICATION INITIALIZATION
+    # APPLICATION INITIALIZATION
     # -------------------------------------------------------------------------
 
     def __init__(self):
@@ -3373,17 +3308,17 @@ class MdadmManager(tk.Tk):
         self.configure(bg="#020802")
 
         # -----------------------------------------------------------------
-        # COULEURS TK IMMÉDIATES / IMMEDIATE TK COLORS
+        
         # -----------------------------------------------------------------
-        # FR — Les widgets Tk classiques (Text, Listbox, Entry...) utilisent
-        #      normalement un fond blanc au moment exact de leur création.
-        #      apply_matrix_widgets() les recolorait ensuite, d'où les deux
-        #      rectangles blancs visibles pendant le chargement.
+        
+        
+        
+        
         #
-        #      option_add() définit leurs couleurs PAR DÉFAUT avant même qu'ils
-        #      soient créés. Ils naissent donc directement en noir/vert.
+        
+        
         #
-        # EN — Classic Tk widgets (Text, Listbox, Entry...) normally start with
+        # Classic Tk widgets (Text, Listbox, Entry...) normally start with
         #      a white background. apply_matrix_widgets() recolored them later,
         #      which caused the two visible white rectangles during startup.
         #
@@ -3430,10 +3365,10 @@ class MdadmManager(tk.Tk):
         # -----------------------------------------------------------------
         # COMBOBOX MATRIX / MATRIX COMBOBOX
         # -----------------------------------------------------------------
-        # FR — Sous certains thèmes Linux, un Combobox readonly peut rester
-        #      blanc même si le style global est sombre. On force ici le fond
-        #      du champ, le texte et les états readonly/active.
-        # EN — On some Linux themes, a readonly Combobox may stay white even
+        
+        
+        
+        # On some Linux themes, a readonly Combobox may stay white even
         #      with a dark global style. Force field, text, readonly and active
         #      colors here for consistent readability.
         style.configure(
@@ -3474,23 +3409,23 @@ class MdadmManager(tk.Tk):
         self.refresh_ms = 15000
         self.selected_member_key = None
         self.selected_manage_member_key = None
-        # Cache SMART pour éviter d'interroger tous les disques toutes les 15 secondes.
-        # Les valeurs sont relues au maximum une fois toutes les 120 secondes.
+        
+        
         self.smart_metrics_cache = {}
         self.smart_metrics_cache_seconds = 120
 
-        # DÉMARRAGE OPTIMISÉ / OPTIMIZED STARTUP
-        # FR — On construit d'abord toute l'interface et on laisse Tkinter l'afficher.
-        #      Les lectures disque/SMART, beaucoup plus lentes, commencent juste après.
-        # EN — Build and display the GUI first. Slower disk/SMART probing starts
+        
+        
+        
+        # Build and display the GUI first. Slower disk/SMART probing starts
         #      immediately afterward, so the application appears much faster.
         self._smart_scan_running = False
 
-        # DÉMARRAGE PROGRESSIF / STAGED STARTUP
-        # FR — Un petit écran MATRIX est affiché immédiatement. La grosse
-        #      interface est ensuite construite onglet par onglet avec after(),
-        #      ce qui évite la fenêtre noire pendant plusieurs secondes.
-        # EN — A lightweight MATRIX loading screen is displayed immediately.
+        
+        
+        
+        
+        # A lightweight MATRIX loading screen is displayed immediately.
         #      The heavy GUI is then built tab by tab with after(), avoiding
         #      a several-second black window.
         self._build_startup_screen()
@@ -3498,14 +3433,14 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # LANGUE ET INTERNATIONALISATION / LANGUAGE AND INTERNATIONALIZATION
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit le menu de langue noir/vert du thème MATRIX.
-    # BEGINNER: EN — Builds the black/green MATRIX language menu.
+    
+    # Builds the black/green MATRIX language menu.
     def build_language_menu(self):
-        """Ajoute un menu Langue / Language persistant, style MATRIX."""
-        # Barre de menu noire avec texte vert, assortie au reste de l'interface.
+
+        
         menu_bg = "#020802"
         menu_fg = "#00dd55"
         menu_active_bg = "#103010"
@@ -3553,8 +3488,8 @@ class MdadmManager(tk.Tk):
         )
         self.config(menu=menubar)
 
-    # BEGINNER: FR — Sauvegarde la nouvelle langue et informe l'utilisateur du comportement de redémarrage.
-    # BEGINNER: EN — Saves the new language and informs the user about restart behavior.
+    
+    # Saves the new language and informs the user about restart behavior.
     def change_language(self, code):
         global CURRENT_LANGUAGE
         if code not in LANGUAGES:
@@ -3571,13 +3506,13 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # CONSTRUCTION DE L'INTERFACE / USER INTERFACE BUILD
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Affiche immédiatement un écran de chargement très léger.
-    # BEGINNER: EN — Immediately displays a very lightweight loading screen.
+    
+    # Immediately displays a very lightweight loading screen.
     def _build_startup_screen(self):
-        """Évite une grande fenêtre noire pendant la construction Tkinter."""
+
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
@@ -3613,26 +3548,26 @@ class MdadmManager(tk.Tk):
             font=("DejaVu Sans Mono", 13, "bold"),
         ).pack(pady=(12, 0))
 
-        # Force uniquement le dessin du petit écran, sans lancer de scan système.
+        
         self.update_idletasks()
 
 
-    # BEGINNER: FR — Prépare les onglets et lance un chargement progressif prioritaire.
-    # BEGINNER: EN — Prepares tabs and starts priority-aware progressive loading.
+    
+    # Prepares tabs and starts priority-aware progressive loading.
     def _build_ui_staged(self):
-        """
-        FR:
-        Tous les onglets sont cliquables immédiatement. En temps normal, ils
-        se construisent progressivement en arrière-plan, assez rapidement.
-        Si l'utilisateur clique sur un onglet qui n'est pas encore construit,
-        cet onglet devient prioritaire et est construit immédiatement.
 
-        EN:
-        All tabs are clickable immediately. Normally they are built
-        progressively in the background at a fairly quick pace. If the user
-        clicks a tab that is not ready yet, that tab gets priority and is
-        built immediately.
-        """
+
+
+
+
+
+
+
+
+
+
+
+
         self.nb = ttk.Notebook(self)
         self.nb.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         self.nb.configure(style="Matrix.TNotebook")
@@ -3659,7 +3594,7 @@ class MdadmManager(tk.Tk):
         )
         self.status_widget.grid(row=1, column=0, sticky="ew")
 
-        # État du chargeur progressif.
+        
         # 0=Dashboard, 1=Create RAID, 2=Manage RAID, 3=Disks,
         # 4=Configuration, 5=RAID Info.
         self._startup_tab_built = set()
@@ -3676,27 +3611,27 @@ class MdadmManager(tk.Tk):
             5: self._build_info,
         }
 
-        # Ordre normal si l'utilisateur ne touche à rien.
-        # RAID Info reste en dernier car il contient surtout du contenu statique.
+        
+        
         self._startup_background_order = [0, 1, 2, 3, 4, 5]
 
-        # Petit message noir/vert dans chaque page tant qu'elle n'est pas prête.
+        
         for index in range(6):
             self._show_tab_loading_placeholder(index)
 
-        # Un clic utilisateur sur un onglet non prêt lui donne immédiatement
-        # priorité sur la file de chargement progressive.
+        
+        
         self.nb.bind("<<NotebookTabChanged>>", self._on_startup_tab_changed, add="+")
 
         self.startup_progress_var.set("[█░░░░░] Dashboard")
 
-        # Dashboard en premier, puis chargement progressif des autres pages.
+        
         self.nb.select(self.tab_dashboard)
         self.after(1, lambda: self._ensure_startup_tab_built(0, user_requested=False))
 
 
     def _show_tab_loading_placeholder(self, index):
-        """Affiche un message MATRIX temporaire dans un onglet pas encore construit."""
+
         tab = self.nb.nametowidget(self.nb.tabs()[index])
 
         holder = tk.Frame(tab, bg="#020802")
@@ -3721,19 +3656,19 @@ class MdadmManager(tk.Tk):
 
 
     def _clear_tab_before_build(self, index):
-        """Supprime uniquement le contenu temporaire avant de construire la vraie page."""
+
         tab = self.nb.nametowidget(self.nb.tabs()[index])
         for child in tab.winfo_children():
             child.destroy()
 
 
     def _on_startup_tab_changed(self, event=None):
-        """
-        FR — Si l'utilisateur ouvre une page pas encore prête, on interrompt
-        brièvement la file normale et on construit cette page en priorité.
-        EN — If the user opens a page that is not ready yet, briefly pause the
-        normal queue and build that page first.
-        """
+
+
+
+
+
+
         if not hasattr(self, "_startup_tab_built"):
             return
 
@@ -3747,12 +3682,12 @@ class MdadmManager(tk.Tk):
 
 
     def _ensure_startup_tab_built(self, index, user_requested=False):
-        """Construit une page une seule fois et gère la priorité utilisateur."""
+
         if index in self._startup_tab_built or index in self._startup_tab_building:
             return
 
-        # Si l'utilisateur demande une page, annule le prochain petit délai
-        # de chargement de fond: son clic passe devant.
+        
+        
         if user_requested and self._startup_background_after_id is not None:
             try:
                 self.after_cancel(self._startup_background_after_id)
@@ -3791,7 +3726,7 @@ class MdadmManager(tk.Tk):
             else f"Loading: {tab_name}…"
         )
 
-        # Laisse Tkinter peindre le changement de texte avant la construction.
+        
         self.update_idletasks()
 
         self._clear_tab_before_build(index)
@@ -3803,7 +3738,7 @@ class MdadmManager(tk.Tk):
         finally:
             self._startup_tab_building.discard(index)
 
-        # Le Dashboard devient visible le plus tôt possible.
+        
         if index == 0:
             if getattr(self, "startup_frame", None) is not None:
                 self.startup_frame.destroy()
@@ -3821,7 +3756,7 @@ class MdadmManager(tk.Tk):
                 ),
             )
 
-        # Quand Manage RAID apparaît, synchroniser immédiatement sa liste.
+        
         elif index == 2:
             self.after(
                 1,
@@ -3833,8 +3768,8 @@ class MdadmManager(tk.Tk):
 
         self.update_idletasks()
 
-        # Si tout est prêt, terminer le démarrage. Sinon reprendre la file de
-        # fond après un court délai. 65 ms garde un effet progressif visible
+        
+        
         # sans donner l'impression que l'application prend son temps.
         if len(self._startup_tab_built) == len(self._startup_tab_builders):
             self._finish_progressive_startup()
@@ -3844,7 +3779,7 @@ class MdadmManager(tk.Tk):
 
 
     def _schedule_next_background_tab(self, delay=65):
-        """Programme la prochaine page non construite sans bloquer l'interface."""
+
         if self._startup_finished:
             return
 
@@ -3861,7 +3796,7 @@ class MdadmManager(tk.Tk):
 
 
     def _build_next_background_tab(self):
-        """Construit la prochaine page de la file normale."""
+
         self._startup_background_after_id = None
 
         for index in self._startup_background_order:
@@ -3876,7 +3811,7 @@ class MdadmManager(tk.Tk):
 
 
     def _finish_progressive_startup(self):
-        """Finalise le thème puis démarre les scans système/SMART."""
+
         if self._startup_finished:
             return
 
@@ -3893,13 +3828,13 @@ class MdadmManager(tk.Tk):
             else "Interface ready — background system analysis…"
         )
 
-        # Les lectures réelles commencent seulement une fois l'interface prête.
+        
         self.after(1, self._startup_fast_refresh)
         self.after(self.refresh_ms, self.auto_refresh)
 
 
-    # Compatibilité interne : si du code appelle encore _build_ui(), utiliser
-    # simplement la nouvelle construction progressive.
+    
+    
     def _build_ui(self):
         self._build_startup_screen()
         self.after(25, self._build_ui_staged)
@@ -3909,8 +3844,8 @@ class MdadmManager(tk.Tk):
     # ONGLET INFO RAID / RAID INFO TAB
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'onglet pédagogique RAID Info et ses schémas explicatifs.
-    # BEGINNER: EN — Builds the educational RAID Info tab and its diagrams.
+    
+    # Builds the educational RAID Info tab and its diagrams.
     def _build_info(self):
         f = self.tab_info
         f.columnconfigure(0, weight=1)
@@ -4122,11 +4057,11 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # ONGLET TABLEAU DE BORD / DASHBOARD TAB
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit le tableau de bord des RAID actifs.
-    # BEGINNER: EN — Builds the active-array dashboard.
+    
+    # Builds the active-array dashboard.
     def _build_dashboard(self):
         f = self.tab_dashboard
         f.columnconfigure(0, weight=0)
@@ -4274,11 +4209,11 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # ONGLET CRÉATION RAID / CREATE RAID TAB
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'onglet de création et le bouton qui ouvre l'assistant.
-    # BEGINNER: EN — Builds the creation tab and the button that opens the wizard.
+    
+    # Builds the creation tab and the button that opens the wizard.
     def _build_create(self):
         f = self.tab_create
         f.columnconfigure(0, weight=1)
@@ -4331,7 +4266,7 @@ class MdadmManager(tk.Tk):
                 "• Analyse mdadm --examine des anciennes métadonnées RAID\n"
                 "• --zero-superblock proposé seulement pour un ancien RAID orphelin\n"
                 "• Le mode avancé ne peut jamais contourner RAID ou FSTAB\n"
-                "• Vérification finale de la commande mdadm avant écriture\n"                "• Interface Français / English sélectionnable et mémorisée"
+                "• Vérification finale de la commande mdadm avant écriture\n"                 "• Interface Français / English sélectionnable et mémorisée"
             ),
             justify="left",
             padding=12,
@@ -4357,8 +4292,8 @@ class MdadmManager(tk.Tk):
             font=("TkFixedFont", 10)
         ).grid(row=0, column=0, sticky="nw")
 
-        # Compatibilité interne avec les anciennes fonctions de création.
-        # Ces widgets ne sont plus utilisés par l'interface principale.
+        
+        
         self.create_name = ttk.Entry(f)
         self.create_name.insert(0, "md20")
         self.create_level = ttk.Combobox(f, values=["raid0", "raid1", "raid5", "raid6", "raid10"], style="Matrix.TCombobox")
@@ -4370,8 +4305,8 @@ class MdadmManager(tk.Tk):
         self.create_bitmap = tk.BooleanVar(value=True)
         self.create_disks = tk.Listbox(f, selectmode="extended")
 
-    # BEGINNER: FR — Ouvre une nouvelle instance de l'assistant de création RAID.
-    # BEGINNER: EN — Opens a new RAID creation wizard instance.
+    
+    # Opens a new RAID creation wizard instance.
     def open_create_wizard(self):
         RaidCreationWizard(self)
 
@@ -4380,8 +4315,8 @@ class MdadmManager(tk.Tk):
     # ONGLET GESTION RAID / MANAGE RAID TAB
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit les contrôles de gestion: détails, stop, check, repair, membres, etc.
-    # BEGINNER: EN — Builds management controls: details, stop, check, repair, members, etc.
+    
+    # Builds management controls: details, stop, check, repair, members, etc.
     def _build_manage(self):
         f = self.tab_manage
         f.columnconfigure(0, weight=1)
@@ -4464,8 +4399,8 @@ class MdadmManager(tk.Tk):
     # ONGLET DISQUES / SMART / DISKS / SMART TAB
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'inventaire des disques physiques et leurs colonnes SMART/RAID.
-    # BEGINNER: EN — Builds the physical disk inventory with SMART/RAID columns.
+    
+    # Builds the physical disk inventory with SMART/RAID columns.
     def _build_disks(self):
         f = self.tab_disks
         f.rowconfigure(0, weight=1)
@@ -4566,8 +4501,8 @@ class MdadmManager(tk.Tk):
     # ONGLET CONFIGURATION MDADM / MDADM CONFIGURATION TAB
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit l'éditeur du fichier mdadm.conf.
-    # BEGINNER: EN — Builds the mdadm.conf editor.
+    
+    # Builds the mdadm.conf editor.
     def _build_config(self):
         f = self.tab_config
         self.config_loaded_path = "/etc/mdadm/mdadm.conf"
@@ -4594,8 +4529,8 @@ class MdadmManager(tk.Tk):
         self.config_text = tk.Text(f, wrap="none", font=("TkFixedFont", 10))
         self.config_text.grid(row=2, column=0, sticky="nsew", padx=6, pady=6)
 
-    # BEGINNER: FR — Applique les couleurs et styles MATRIX aux widgets qui nécessitent un ajustement après création.
-    # BEGINNER: EN — Applies MATRIX colors/styles to widgets needing post-creation adjustments.
+    
+    # Applies MATRIX colors/styles to widgets needing post-creation adjustments.
     def apply_matrix_widgets(self):
         def walk(widget):
             for child in widget.winfo_children():
@@ -4618,19 +4553,19 @@ class MdadmManager(tk.Tk):
                 walk(child)
         walk(self)
 
-    # BEGINNER: FR — Change le message affiché dans la barre d'état inférieure.
-    # BEGINNER: EN — Changes the message shown in the bottom status bar.
+    
+    # Changes the message shown in the bottom status bar.
     def set_status(self, text):
         self.status_var.set(text)
         self.update_idletasks()
 
 
     # -------------------------------------------------------------------------
-    # EXÉCUTION ASYNCHRONE DES COMMANDES / ASYNCHRONOUS COMMAND EXECUTION
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Exécute une tâche lente dans un thread puis revient dans le thread Tkinter pour mettre l'interface à jour.
-    # BEGINNER: EN — Runs slow work in a thread, then returns to Tkinter's thread to update the GUI.
+    
+    # Runs slow work in a thread, then returns to Tkinter's thread to update the GUI.
     def run_async(
         self,
         cmd,
@@ -4640,10 +4575,10 @@ class MdadmManager(tk.Tk):
         show_error_popup=True,
         refresh_after=True
     ):
-        # BEGINNER: FR — Tkinter n'aime pas que les commandes lentes bloquent son thread principal.
-        # BEGINNER: FR — Le travail système est donc lancé en arrière-plan, puis l'UI est modifiée via after().
-        # BEGINNER: EN — Tkinter must not be blocked by slow system commands on its main thread.
-        # BEGINNER: EN — System work therefore runs in the background, then UI updates return through after().
+        
+        
+        # Tkinter must not be blocked by slow system commands on its main thread.
+        # System work therefore runs in the background, then UI updates return through after().
         def worker():
             actual = privileged_cmd(cmd) if privileged else cmd
             self.after(0, lambda: self.set_status("Exécution : " + shell_join(actual)))
@@ -4654,9 +4589,9 @@ class MdadmManager(tk.Tk):
                     output_widget.delete("1.0", "end")
                     output_widget.insert("end", out)
 
-                    # Pour les commandes dont le code de retour peut être un
-                    # masque d'état (ex. smartctl), garde l'information dans
-                    # la même fenêtre plutôt que d'ouvrir un popup.
+                    
+                    
+                    
                     if rc != 0 and not show_error_popup:
                         output_widget.insert(
                             "end",
@@ -4683,16 +4618,16 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # RAFRAÎCHISSEMENT GLOBAL / GLOBAL REFRESH
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Rafraîchit toutes les vues principales sans obliger l'utilisateur à changer d'onglet.
-    # BEGINNER: EN — Refreshes all major views without requiring the user to switch tabs.
+    
+    # Refreshes all major views without requiring the user to switch tabs.
     def _startup_fast_refresh(self):
-        """Premier affichage rapide, sans attendre toutes les lectures SMART."""
-        # FR — Les informations RAID et lsblk sont généralement rapides.
-        #      SMART peut prendre plusieurs secondes avec beaucoup de disques.
-        # EN — RAID/lsblk information is usually fast. SMART can take several
+
+        
+        
+        # RAID/lsblk information is usually fast. SMART can take several
         #      seconds on systems containing many drives.
         self.set_status(
             f"MDADM Manager v{APP_VERSION} // ROOT // Chargement rapide…"
@@ -4706,11 +4641,11 @@ class MdadmManager(tk.Tk):
         if hasattr(self, "manage_array") and self.manage_array.get().strip():
             self.refresh_manage_members(self.manage_array.get().strip())
 
-        # Lance SMART en tâche de fond après que la fenêtre soit déjà utilisable.
+        
         self.start_smart_refresh_background()
 
     def start_smart_refresh_background(self):
-        """Recharge le cache SMART dans un thread sans bloquer Tkinter."""
+
         if getattr(self, "_smart_scan_running", False):
             return
 
@@ -4730,15 +4665,15 @@ class MdadmManager(tk.Tk):
                 total = len(paths)
 
                 for index, path in enumerate(paths, 1):
-                    # smartctl est lancé ici, dans le thread de fond.
+                    
                     data = smart_usage_metrics(path)
                     self.smart_metrics_cache[path] = {
                         "timestamp": time.time(),
                         "data": data,
                     }
 
-                    # Mise à jour légère du statut; Tkinter est touché uniquement
-                    # depuis son thread principal grâce à after().
+                    
+                    
                     self.after(
                         0,
                         lambda i=index, n=total: self.set_status(
@@ -4750,8 +4685,8 @@ class MdadmManager(tk.Tk):
                 self._smart_scan_running = False
 
                 def finish():
-                    # Toutes les valeurs SMART sont maintenant en cache:
-                    # refresh_disks(False) ne lance donc aucune commande smartctl.
+                    
+                    
                     self.refresh_disks(allow_smart_query=False)
                     self.set_status(
                         f"MDADM Manager v{APP_VERSION} // ROOT // Rafraîchissement 15 s // Prêt"
@@ -4764,8 +4699,8 @@ class MdadmManager(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def refresh_all(self):
-        # FR — Rafraîchissement rapide immédiat, puis SMART en arrière-plan.
-        # EN — Immediate fast refresh, followed by SMART in the background.
+        
+        # Immediate fast refresh, followed by SMART in the background.
         if hasattr(self, "smart_metrics_cache"):
             self.smart_metrics_cache.clear()
 
@@ -4778,19 +4713,19 @@ class MdadmManager(tk.Tk):
 
         self.start_smart_refresh_background()
 
-    # BEGINNER: FR — Programme le prochain rafraîchissement automatique avec Tkinter.after().
-    # BEGINNER: EN — Schedules the next automatic refresh using Tkinter.after().
+    
+    # Schedules the next automatic refresh using Tkinter.after().
     def auto_refresh(self):
         self.refresh_arrays()
         self.after(self.refresh_ms, self.auto_refresh)
 
 
     # -------------------------------------------------------------------------
-    # RAFRAÎCHISSEMENT RAID / RAID REFRESH
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Relit la liste des RAID actifs et met à jour le tableau de bord.
-    # BEGINNER: EN — Rereads active arrays and updates the dashboard.
+    
+    # Rereads active arrays and updates the dashboard.
     def refresh_arrays(self, include_manage=True, allow_smart_query=True):
         arrays = get_md_arrays()
 
@@ -4807,7 +4742,7 @@ class MdadmManager(tk.Tk):
         for a in arrays:
             names.append(a["path"])
 
-            # Détecte un état dégradé pour colorer la ligne de l'array.
+            
             members, _ = parse_mdadm_members(a["path"])
             has_problem = any(m.get("problem") for m in members)
             has_warning = any(m.get("warning") for m in members)
@@ -4826,9 +4761,9 @@ class MdadmManager(tk.Tk):
             except tk.TclError:
                 pass
 
-        # FR — Pendant le démarrage progressif, l'onglet Manage RAID n'existe
-        #      pas encore. On met donc à jour uniquement le Dashboard.
-        # EN — During staged startup, the Manage RAID tab may not exist yet.
+        
+        
+        # During staged startup, the Manage RAID tab may not exist yet.
         #      In that case, update only the Dashboard.
         manage_ready = (
             include_manage
@@ -4853,10 +4788,10 @@ class MdadmManager(tk.Tk):
                     self.arr_list.activate(i)
                     break
 
-            # Le Dashboard peut être rempli immédiatement.
+            
             self.refresh_array_view(target, allow_smart_query=allow_smart_query)
 
-            # Les contrôles Manage RAID ne sont touchés qu'une fois construits.
+            
             if manage_ready:
                 self.refresh_manage_members(self.manage_array.get())
         else:
@@ -4870,8 +4805,8 @@ class MdadmManager(tk.Tk):
                     *self.manage_member_tree.get_children()
                 )
 
-    # BEGINNER: FR — Affiche les détails complets du RAID sélectionné et ses membres.
-    # BEGINNER: EN — Displays full details for the selected array and its members.
+    
+    # Displays full details for the selected array and its members.
     def refresh_array_view(self, path, allow_smart_query=True):
         if not path:
             return
@@ -4945,13 +4880,13 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # SÉLECTION MEMBRES ET CACHE SMART / MEMBER SELECTION AND SMART CACHE
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Construit une clé stable à partir d'une ligne Treeview pour retrouver la sélection après un refresh.
-    # BEGINNER: EN — Builds a stable key from a Treeview row so selection can survive refreshes.
+    
+    # Builds a stable key from a Treeview row so selection can survive refreshes.
     def _member_key_from_values(self, values):
-        """Clé stable pour restaurer la sélection après rafraîchissement."""
+
         if not values:
             return None
 
@@ -4962,13 +4897,13 @@ class MdadmManager(tk.Tk):
         serial = str(values[5]).strip() if len(values) > 5 else ""
         slot = str(values[1]).strip() if len(values) > 1 else ""
 
-        # Priorité au numéro de série, sinon périphérique + slot.
+        
         if serial and serial not in ("INCONNU", "—"):
             return ("serial", serial)
         return ("device", dev, slot)
 
-    # BEGINNER: FR — Retourne la clé stable de la ligne actuellement sélectionnée.
-    # BEGINNER: EN — Returns the stable key for the currently selected row.
+    
+    # Returns the stable key for the currently selected row.
     def _current_tree_selection_key(self, tree):
         sel = tree.selection()
         if not sel:
@@ -4976,8 +4911,8 @@ class MdadmManager(tk.Tk):
         values = tree.item(sel[0], "values")
         return self._member_key_from_values(values)
 
-    # BEGINNER: FR — Utilise un petit cache SMART pour éviter de relancer smartctl inutilement à chaque rafraîchissement.
-    # BEGINNER: EN — Uses a small SMART cache to avoid unnecessarily rerunning smartctl on every refresh.
+    
+    # Uses a small SMART cache to avoid unnecessarily rerunning smartctl on every refresh.
     def get_cached_smart_metrics(self, physical_path, allow_query=True):
         physical = clean_device_path(physical_path)
         if not physical:
@@ -5009,9 +4944,9 @@ class MdadmManager(tk.Tk):
         if cached and (now - cached["timestamp"] < self.smart_metrics_cache_seconds):
             return cached["data"]
 
-        # FR — Lors du démarrage rapide, ne lance surtout pas smartctl ici:
-        #      cette fonction est appelée une fois par disque et bloquerait l'UI.
-        # EN — During fast startup, do not run smartctl here: this function is
+        
+        
+        # During fast startup, do not run smartctl here: this function is
         #      called once per disk and would otherwise block the GUI.
         if not allow_query:
             return {
@@ -5043,10 +4978,10 @@ class MdadmManager(tk.Tk):
         }
         return data
 
-    # BEGINNER: FR — Remplit un Treeview avec les membres d'un RAID et leurs informations matérielles/SMART.
-    # BEGINNER: EN — Fills a Treeview with array members and their hardware/SMART information.
+    
+    # Fills a Treeview with array members and their hardware/SMART information.
     def populate_member_tree(self, tree, array_path, members=None, allow_smart_query=True):
-        # Sauvegarde la sélection actuelle avant de reconstruire le tableau.
+        
         current_key = self._current_tree_selection_key(tree)
 
         if tree is self.member_tree and self.selected_member_key:
@@ -5097,7 +5032,7 @@ class MdadmManager(tk.Tk):
 
             tag = "problem" if m.get("problem") else ("warning" if m.get("warning") else "ok")
 
-            # Même si mdadm dit "active sync", un compteur SMART > 0 mérite l'attention.
+            
             if tag == "ok" and isinstance(bad_total, int) and bad_total > 0:
                 tag = "warning"
 
@@ -5125,14 +5060,14 @@ class MdadmManager(tk.Tk):
             if current_key and key == current_key:
                 selected_item = item
 
-        # Restaure automatiquement la sélection après le refresh.
+        
         if selected_item:
             tree.selection_set(selected_item)
             tree.focus(selected_item)
             tree.see(selected_item)
 
-    # BEGINNER: FR — Callback lorsque l'utilisateur choisit un RAID sur le Dashboard.
-    # BEGINNER: EN — Callback when the user selects an array on the Dashboard.
+    
+    # Callback when the user selects an array on the Dashboard.
     def on_array_select(self, _event=None):
         sel = self.arr_list.curselection()
         if not sel:
@@ -5156,8 +5091,8 @@ class MdadmManager(tk.Tk):
         if hasattr(self, "manage_array") and hasattr(self, "manage_member_tree"):
             self.refresh_manage_members(path)
 
-    # BEGINNER: FR — Callback lorsque l'utilisateur choisit un RAID dans l'onglet Manage RAID.
-    # BEGINNER: EN — Callback when the user selects an array in Manage RAID.
+    
+    # Callback when the user selects an array in Manage RAID.
     def on_manage_array_select(self, _event=None):
         path = self.manage_array.get().strip()
         if not path:
@@ -5167,8 +5102,8 @@ class MdadmManager(tk.Tk):
         self.selected_manage_member_key = None
         self.refresh_manage_members(path)
 
-    # BEGINNER: FR — Recharge les membres du RAID actuellement géré.
-    # BEGINNER: EN — Reloads members of the array currently being managed.
+    
+    # Reloads members of the array currently being managed.
     def refresh_manage_members(self, path=None):
         path = (path or self.manage_array.get()).strip()
         if not path:
@@ -5176,8 +5111,8 @@ class MdadmManager(tk.Tk):
         members, _ = parse_mdadm_members(path)
         self.populate_member_tree(self.manage_member_tree, path, members)
 
-    # BEGINNER: FR — Transforme la ligne Treeview sélectionnée en informations de membre exploitables.
-    # BEGINNER: EN — Converts the selected Treeview row into usable member information.
+    
+    # Converts the selected Treeview row into usable member information.
     def selected_member_from_tree(self, tree):
         sel = tree.selection()
         if not sel:
@@ -5198,17 +5133,17 @@ class MdadmManager(tk.Tk):
             "serial": str(values[5]),
         }
 
-    # BEGINNER: FR — Retourne le membre actuellement sélectionné dans la vue appropriée.
-    # BEGINNER: EN — Returns the member currently selected in the relevant view.
+    
+    # Returns the member currently selected in the relevant view.
     def get_selected_member(self):
-        # Priorité à l'onglet Gestion, sinon au tableau de bord.
+        
         member = self.selected_member_from_tree(self.manage_member_tree)
         if member:
             return member
         return self.selected_member_from_tree(self.member_tree)
 
-    # BEGINNER: FR — Met à jour les boutons/informations quand un membre est sélectionné sur le Dashboard.
-    # BEGINNER: EN — Updates buttons/information when a member is selected on the Dashboard.
+    
+    # Updates buttons/information when a member is selected on the Dashboard.
     def on_member_select(self, _event=None):
         member = self.selected_member_from_tree(self.member_tree)
         if not member:
@@ -5222,7 +5157,7 @@ class MdadmManager(tk.Tk):
             f"Sélection : {dev}    Slot {member['slot']}    État : {member['state']}"
         )
 
-        # Synchronise la sélection avec l'onglet Gestion.
+        
         path = self.selected_array.get().strip()
         if path:
             self.manage_array.set(path)
@@ -5238,8 +5173,8 @@ class MdadmManager(tk.Tk):
                     self.selected_manage_member_key = target_key
                     break
 
-    # BEGINNER: FR — Met à jour l'état des actions quand un membre est sélectionné dans Manage RAID.
-    # BEGINNER: EN — Updates action state when a member is selected in Manage RAID.
+    
+    # Updates action state when a member is selected in Manage RAID.
     def on_manage_member_select(self, _event=None):
         member = self.selected_member_from_tree(self.manage_member_tree)
         if member:
@@ -5250,8 +5185,8 @@ class MdadmManager(tk.Tk):
                 f"Disque sélectionné : {dev} // {member['state']} // slot {member['slot']}"
             )
 
-    # BEGINNER: FR — Affiche la sortie détaillée mdadm du RAID choisi sur le Dashboard.
-    # BEGINNER: EN — Shows detailed mdadm output for the array selected on the Dashboard.
+    
+    # Shows detailed mdadm output for the array selected on the Dashboard.
     def dashboard_details(self):
         path = self.selected_array.get().strip()
         if path:
@@ -5259,16 +5194,16 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # INVENTAIRE DES DISQUES / DISK INVENTORY
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Réinvente l'inventaire disque complet et met à jour l'onglet Disks.
-    # BEGINNER: EN — Rebuilds the full disk inventory and updates the Disks tab.
+    
+    # Rebuilds the full disk inventory and updates the Disks tab.
     def refresh_disks(self, allow_smart_query=True):
         devices = get_block_devices()
         membership = get_raid_membership_map()
 
-        # Conserve la sélection du disque si possible.
+        
         old_selected_path = ""
         sel = self.disk_tree.selection()
         if sel:
@@ -5293,7 +5228,7 @@ class MdadmManager(tk.Tk):
             except Exception:
                 size_txt = str(size)
 
-            # ---------- RAID réel via mdadm ----------
+            
             raid_entries = membership.get(path, [])
 
             if raid_entries:
@@ -5341,7 +5276,7 @@ class MdadmManager(tk.Tk):
             )
             fstype = d.get("fstype", "") or ""
 
-            # Si le disque parent n'a pas de FS, cherche ses partitions.
+            
             child_fs = []
             child_mounts = []
             for child in d.get("children") or []:
@@ -5363,7 +5298,7 @@ class MdadmManager(tk.Tk):
             if not mounttxt and child_mounts:
                 mounttxt = " | ".join(child_mounts)
 
-            # ---------- Couleur ----------
+            
             tag = "ok"
 
             if any(x.get("problem") for x in raid_entries):
@@ -5420,13 +5355,13 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # MOTEUR DE CRÉATION RAID HISTORIQUE / LEGACY RAID CREATION ENGINE
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Rafraîchit la liste des disques utilisables par l'ancien écran de création.
-    # BEGINNER: EN — Refreshes disks usable by the legacy creation screen.
+    
+    # Refreshes disks usable by the legacy creation screen.
     def refresh_create_disks(self):
-        # Conservé pour compatibilité avec l'ancien moteur de création.
+        
         if not hasattr(self, "create_disks"):
             return
 
@@ -5474,8 +5409,8 @@ class MdadmManager(tk.Tk):
             )
 
     @staticmethod
-    # BEGINNER: FR — Convertit un nombre d'octets en taille lisible (GiB/TiB).
-    # BEGINNER: EN — Converts a byte count into a human-readable size (GiB/TiB).
+    
+    # Converts a byte count into a human-readable size (GiB/TiB).
     def human_size(n):
         units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
         x = float(n)
@@ -5484,8 +5419,8 @@ class MdadmManager(tk.Tk):
                 return f"{x:.1f} {u}"
             x /= 1024.0
 
-    # BEGINNER: FR — Retourne les chemins des disques sélectionnés dans l'écran de création principal.
-    # BEGINNER: EN — Returns paths selected in the main creation screen.
+    
+    # Returns paths selected in the main creation screen.
     def selected_create_paths(self):
         paths = []
         for idx in self.create_disks.curselection():
@@ -5493,8 +5428,8 @@ class MdadmManager(tk.Tk):
             paths.append(line.split()[0])
         return paths
 
-    # BEGINNER: FR — Construit la commande mdadm de création à partir des choix de l'écran principal.
-    # BEGINNER: EN — Builds the mdadm creation command from main-screen selections.
+    
+    # Builds the mdadm creation command from main-screen selections.
     def build_create_cmd(self):
         name = self.create_name.get().strip()
         if not re.fullmatch(r"md\d+", name):
@@ -5561,8 +5496,8 @@ class MdadmManager(tk.Tk):
         cmd += disks
         return cmd
 
-    # BEGINNER: FR — Montre la commande de création avant toute écriture.
-    # BEGINNER: EN — Shows the creation command before any write occurs.
+    
+    # Shows the creation command before any write occurs.
     def preview_create(self):
         try:
             cmd = self.build_create_cmd()
@@ -5571,8 +5506,8 @@ class MdadmManager(tk.Tk):
             return
         messagebox.showinfo("Commande mdadm", shell_join(cmd))
 
-    # BEGINNER: FR — Effectue les dernières validations de sécurité puis lance la création du RAID.
-    # BEGINNER: EN — Performs final safety validation and starts array creation.
+    
+    # Performs final safety validation and starts array creation.
     def create_array(self):
         try:
             cmd = self.build_create_cmd()
@@ -5598,11 +5533,11 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # COMMANDES DE GESTION RAID / RAID MANAGEMENT COMMANDS
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Retourne le chemin du RAID actuellement sélectionné dans Manage RAID.
-    # BEGINNER: EN — Returns the path of the array currently selected in Manage RAID.
+    
+    # Returns the path of the array currently selected in Manage RAID.
     def current_manage_array(self):
         p = self.manage_array.get().strip() or self.selected_array.get().strip()
         if not p:
@@ -5610,15 +5545,15 @@ class MdadmManager(tk.Tk):
             return None
         return p
 
-    # BEGINNER: FR — Affiche 'mdadm --detail' pour le RAID sélectionné.
-    # BEGINNER: EN — Displays 'mdadm --detail' for the selected array.
+    
+    # Displays 'mdadm --detail' for the selected array.
     def manage_details(self):
         p = self.current_manage_array()
         if p:
             self.run_async(["mdadm", "--detail", p], self.manage_output)
 
-    # BEGINNER: FR — Tente d'assembler le RAID choisi.
-    # BEGINNER: EN — Attempts to assemble the selected array.
+    
+    # Attempts to assemble the selected array.
     def manage_assemble(self):
         p = self.current_manage_array()
         if not p:
@@ -5627,8 +5562,8 @@ class MdadmManager(tk.Tk):
         if messagebox.askyesno("Assembler", f"Exécuter :\n{shell_join(cmd)} ?"):
             self.run_async(cmd, self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Arrête proprement un RAID après confirmation.
-    # BEGINNER: EN — Stops an array safely after confirmation.
+    
+    # Stops an array safely after confirmation.
     def manage_stop(self):
         p = self.current_manage_array()
         if not p:
@@ -5643,8 +5578,8 @@ class MdadmManager(tk.Tk):
         if dlg.result:
             self.run_async(["mdadm", "--stop", p], self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Déclenche une vérification de cohérence du RAID.
-    # BEGINNER: EN — Starts an array consistency check.
+    
+    # Starts an array consistency check.
     def manage_check(self):
         p = self.current_manage_array()
         if not p:
@@ -5654,8 +5589,8 @@ class MdadmManager(tk.Tk):
         if messagebox.askyesno("Check RAID", f"Lancer une vérification sur {p} ?"):
             self.run_async(cmd, self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Déclenche une réparation/resynchronisation contrôlée selon les possibilités mdadm.
-    # BEGINNER: EN — Starts a controlled repair/resync where supported by mdadm.
+    
+    # Starts a controlled repair/resync where supported by mdadm.
     def manage_repair(self):
         p = self.current_manage_array()
         if not p:
@@ -5672,8 +5607,8 @@ class MdadmManager(tk.Tk):
         if dlg.result:
             self.run_async(cmd, self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Demande à l'utilisateur un chemin de périphérique avec une petite boîte de dialogue.
-    # BEGINNER: EN — Asks the user for a device path using a small dialog.
+    
+    # Asks the user for a device path using a small dialog.
     def ask_device(self, title):
         value = simpledialog.askstring(title, "Périphérique (ex. /dev/sdb1 ou /dev/sdb) :", parent=self)
         if not value:
@@ -5684,8 +5619,8 @@ class MdadmManager(tk.Tk):
             return None
         return value
 
-    # BEGINNER: FR — Ajoute un périphérique comme membre/spare après contrôles de sécurité.
-    # BEGINNER: EN — Adds a device as member/spare after safety checks.
+    
+    # Adds a device as member/spare after safety checks.
     def manage_add(self):
         p = self.current_manage_array()
         if not p:
@@ -5697,8 +5632,8 @@ class MdadmManager(tk.Tk):
         if messagebox.askyesno("Ajouter membre", f"Exécuter :\n{shell_join(cmd)} ?"):
             self.run_async(cmd, self.manage_output, privileged=True, timeout=120)
 
-    # BEGINNER: FR — Retire un membre du RAID seulement lorsque l'état et les confirmations le permettent.
-    # BEGINNER: EN — Removes a member only when array state and confirmations allow it.
+    
+    # Removes a member only when array state and confirmations allow it.
     def manage_remove(self):
         p = self.current_manage_array()
         if not p:
@@ -5716,8 +5651,8 @@ class MdadmManager(tk.Tk):
         if dlg.result:
             self.run_async(["mdadm", p, "--remove", dev], self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Marque volontairement le membre choisi comme faulty après confirmation explicite.
-    # BEGINNER: EN — Explicitly marks the selected member faulty after confirmation.
+    
+    # Explicitly marks the selected member faulty after confirmation.
     def manage_faulty(self):
         p = self.current_manage_array()
         if not p:
@@ -5735,8 +5670,8 @@ class MdadmManager(tk.Tk):
         if dlg.result:
             self.run_async(["mdadm", p, "--fail", dev], self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Efface un ancien superblock mdadm uniquement après toutes les protections et confirmations.
-    # BEGINNER: EN — Clears old mdadm metadata only after all safety checks and confirmations.
+    
+    # Clears old mdadm metadata only after all safety checks and confirmations.
     def manage_zero_superblock(self):
         dev = self.ask_device("Zero superblock")
         if not dev:
@@ -5770,8 +5705,8 @@ class MdadmManager(tk.Tk):
         )
         self.wait_window(dlg)
         if dlg.result:
-            # Re-vérification juste avant l'exécution pour éviter une course
-            # avec un rafraîchissement ou un changement d'état.
+            
+            
             protection = protected_raid_message(dev)
             if protection:
                 messagebox.showerror(
@@ -5796,8 +5731,8 @@ class MdadmManager(tk.Tk):
                 privileged=True
             )
 
-    # BEGINNER: FR — Ouvre SMART pour le membre actuellement sélectionné.
-    # BEGINNER: EN — Opens SMART information for the currently selected member.
+    
+    # Opens SMART information for the currently selected member.
     def member_smart(self, _event=None):
         member = self.get_selected_member()
         if not member or not member.get("device"):
@@ -5805,8 +5740,8 @@ class MdadmManager(tk.Tk):
             return
         self.show_smart_for_path(member["device"])
 
-    # BEGINNER: FR — Raccourci Dashboard pour marquer le membre sélectionné faulty.
-    # BEGINNER: EN — Dashboard shortcut to mark the selected member faulty.
+    
+    # Dashboard shortcut to mark the selected member faulty.
     def member_faulty(self):
         p = self.manage_array.get().strip() or self.selected_array.get().strip()
         member = self.get_selected_member()
@@ -5830,8 +5765,8 @@ class MdadmManager(tk.Tk):
         if dlg.result:
             self.run_async(["mdadm", p, "--fail", dev], self.manage_output, privileged=True)
 
-    # BEGINNER: FR — Raccourci Dashboard pour retirer le membre sélectionné.
-    # BEGINNER: EN — Dashboard shortcut to remove the selected member.
+    
+    # Dashboard shortcut to remove the selected member.
     def member_remove(self):
         p = self.manage_array.get().strip() or self.selected_array.get().strip()
         member = self.get_selected_member()
@@ -5862,11 +5797,11 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # AFFICHAGE SMART DÉTAILLÉ / DETAILED SMART DISPLAY
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Collecte puis affiche les informations SMART détaillées d'un chemin /dev.
-    # BEGINNER: EN — Collects and displays detailed SMART information for a /dev path.
+    
+    # Collects and displays detailed SMART information for a /dev path.
     def show_smart_for_path(self, path):
         if not shutil.which("smartctl"):
             messagebox.showerror(
@@ -5887,7 +5822,7 @@ class MdadmManager(tk.Tk):
             self.refresh_all()
             return
 
-        # Relit les informations juste avant SMART.
+        
         info = physical_disk_info(member)
         model = (info.get("model") or "INCONNU").strip()
         serial = (info.get("serial") or "INCONNU").strip()
@@ -5931,8 +5866,8 @@ class MdadmManager(tk.Tk):
         else:
             usage_text = "—"
 
-        # Sécurité supplémentaire : le chemin transmis à smartctl doit être
-        # exactement un périphérique /dev existant, sans annotation ni newline.
+        
+        
         smart_path = clean_device_path(smart_path)
         if not smart_path or not Path(smart_path).exists():
             messagebox.showerror(
@@ -5951,11 +5886,11 @@ class MdadmManager(tk.Tk):
         header = ttk.Frame(win)
         header.pack(fill="x", padx=8, pady=8)
 
-        # FR — Certains champs ne s'appliquent pas à tous les types de disque.
-        #      On affiche maintenant une explication au lieu d'un simple tiret.
-        # EN — Some fields do not apply to every drive type. Show an explanation
+        
+        
+        # Some fields do not apply to every drive type. Show an explanation
         #      instead of an ambiguous dash.
-        # Textes bilingues de l'affichage SMART.
+        
         # Bilingual SMART display strings.
         is_en = CURRENT_LANGUAGE == "en"
 
@@ -6009,7 +5944,7 @@ class MdadmManager(tk.Tk):
                 )
             )
 
-        # Informations SMART additionnelles réellement fournies par le disque.
+        
         # Additional SMART information actually reported by the drive.
         extra_lines = []
 
@@ -6105,8 +6040,8 @@ class MdadmManager(tk.Tk):
         txt.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self.apply_matrix_widgets()
 
-        # IMPORTANT : liste d'arguments directe, aucun shell et aucun texte
-        # provenant de la colonne graphique.
+        
+        
         self.run_async(
             ["smartctl", "-a", smart_path],
             txt,
@@ -6118,20 +6053,20 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # REMPLACEMENT D'UN MEMBRE RAID / RAID MEMBER REPLACEMENT
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Assistant de remplacement: vérifie l'ancien membre, propose un nouveau disque et prépare la séquence mdadm.
-    # BEGINNER: EN — Replacement workflow: validates old member, proposes a new disk, and prepares the mdadm sequence.
+    
+    # Replacement workflow: validates old member, proposes a new disk, and prepares the mdadm sequence.
     def replace_selected_member(self):
-        """
-        Assistant de remplacement :
-          1. sélection de l'ancien membre
-          2. choix du nouveau périphérique
-          3. fail (si nécessaire)
-          4. remove
-          5. add
-        """
+
+
+
+
+
+
+
+
         array_path = self.manage_array.get().strip() or self.selected_array.get().strip()
         member = self.get_selected_member()
 
@@ -6314,8 +6249,8 @@ class MdadmManager(tk.Tk):
 
         self.apply_matrix_widgets()
 
-    # BEGINNER: FR — Exécute séquentiellement les commandes nécessaires au remplacement et arrête au premier échec.
-    # BEGINNER: EN — Runs replacement commands sequentially and stops on the first failure.
+    
+    # Runs replacement commands sequentially and stops on the first failure.
     def run_replace_sequence(self, commands, array_path, old_label, new_dev):
         def worker():
             log = []
@@ -6355,8 +6290,8 @@ class MdadmManager(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    # BEGINNER: FR — Ouvre SMART pour le disque sélectionné dans l'onglet Disks.
-    # BEGINNER: EN — Opens SMART information for the disk selected in Disks.
+    
+    # Opens SMART information for the disk selected in Disks.
     def show_smart(self):
         sel = self.disk_tree.selection()
         if not sel:
@@ -6367,11 +6302,11 @@ class MdadmManager(tk.Tk):
 
 
     # -------------------------------------------------------------------------
-    # GESTION DE /etc/mdadm/mdadm.conf / MANAGING /etc/mdadm/mdadm.conf
+    
     # -------------------------------------------------------------------------
 
-    # BEGINNER: FR — Charge /etc/mdadm/mdadm.conf dans l'éditeur texte.
-    # BEGINNER: EN — Loads /etc/mdadm/mdadm.conf into the text editor.
+    
+    # Loads /etc/mdadm/mdadm.conf into the text editor.
     def load_config(self):
         path = Path("/etc/mdadm/mdadm.conf")
         try:
@@ -6395,8 +6330,8 @@ class MdadmManager(tk.Tk):
                 f"Impossible de charger {path}\n\n{exc}"
             )
 
-    # BEGINNER: FR — Demande à mdadm de scanner les RAID et place le résultat dans l'éditeur.
-    # BEGINNER: EN — Asks mdadm to scan arrays and places the result in the editor.
+    
+    # Asks mdadm to scan arrays and places the result in the editor.
     def scan_config(self):
         rc, out = run(["mdadm", "--detail", "--scan"], timeout=30)
         if rc != 0:
@@ -6408,8 +6343,8 @@ class MdadmManager(tk.Tk):
         self.config_text.delete("1.0", "end")
         self.config_text.insert("end", current + out.strip() + "\n")
 
-    # BEGINNER: FR — Sauvegarde prudemment le contenu de l'éditeur dans mdadm.conf.
-    # BEGINNER: EN — Safely saves editor contents into mdadm.conf.
+    
+    # Safely saves editor contents into mdadm.conf.
     def save_config(self):
         path = Path("/etc/mdadm/mdadm.conf")
         content = self.config_text.get("1.0", "end-1c")
@@ -6451,8 +6386,8 @@ class MdadmManager(tk.Tk):
                 f"Impossible d'enregistrer {path}\n\n{exc}"
             )
 
-    # BEGINNER: FR — Enregistre une copie de la configuration vers un fichier choisi par l'utilisateur.
-    # BEGINNER: EN — Exports a copy of the configuration to a user-selected file.
+    
+    # Exports a copy of the configuration to a user-selected file.
     def export_config(self):
         content = self.config_text.get("1.0", "end-1c")
 
@@ -6491,65 +6426,67 @@ class MdadmManager(tk.Tk):
 
 
 # =============================================================================
-# MODULE 9 — DÉMARRAGE ET DÉPENDANCES / MODULE 9 — STARTUP AND DEPENDENCIES
+# MODULE 9 — STARTUP AND DEPENDENCIES
 # =============================================================================
 
-# BEGINNER: FR — Vérifie au démarrage que les commandes système indispensables sont disponibles.
-# BEGINNER: EN — Checks at startup that required system commands are available.
+
+# Checks at startup that required system commands are available.
 def dependency_check():
-    """Vérifie les dépendances système minimales avant de lancer l'interface."""
+
     missing = []
     for exe in ("mdadm", "lsblk"):
         if not shutil.which(exe):
             missing.append(exe)
     return missing
 
+def main():
+        if os.geteuid() != 0:
+            launched, method = relaunch_as_root()
+            if launched:
+                raise SystemExit(0)
+
+            try:
+                r = tk.Tk()
+                r.withdraw()
+                messagebox.showerror(
+                    "Élévation ROOT impossible",
+                    f"MDADM Manager v{APP_VERSION} n'a trouvé ni kdesu ni pkexec.\n\n"
+                    "Installe au besoin :\n"
+                    "sudo apt install kde-cli-tools pkexec"
+                )
+                r.destroy()
+            except Exception:
+                print("Impossible d'obtenir les privilèges root : kdesu/pkexec introuvable.")
+            raise SystemExit(1)
+
+        missing = dependency_check()
+
+        try:
+            app = MdadmManager()
+        except Exception as exc:
+
+            try:
+                r = tk.Tk()
+                r.withdraw()
+                messagebox.showerror(
+                    "Erreur au démarrage",
+                    f"MDADM Manager v{APP_VERSION} n'a pas pu démarrer.\n\n{exc}"
+                )
+                r.destroy()
+            except Exception:
+                print(f"ERREUR AU DÉMARRAGE : {exc}")
+            raise
+
+        if missing:
+            app.after(
+                250,
+                lambda: messagebox.showwarning(
+                    "Dépendances",
+                    "Commandes manquantes : " + ", ".join(missing)
+                )
+            )
+
+        app.mainloop()
 
 if __name__ == "__main__":
-    if os.geteuid() != 0:
-        launched, method = relaunch_as_root()
-        if launched:
-            raise SystemExit(0)
-
-        try:
-            r = tk.Tk()
-            r.withdraw()
-            messagebox.showerror(
-                "Élévation ROOT impossible",
-                f"MDADM Manager v{APP_VERSION} n'a trouvé ni kdesu ni pkexec.\n\n"
-                "Installe au besoin :\n"
-                "sudo apt install kde-cli-tools pkexec"
-            )
-            r.destroy()
-        except Exception:
-            print("Impossible d'obtenir les privilèges root : kdesu/pkexec introuvable.")
-        raise SystemExit(1)
-
-    missing = dependency_check()
-
-    try:
-        app = MdadmManager()
-    except Exception as exc:
-        # Affiche aussi les erreurs de démarrage au lieu de quitter silencieusement.
-        try:
-            r = tk.Tk()
-            r.withdraw()
-            messagebox.showerror(
-                "Erreur au démarrage",
-                f"MDADM Manager v{APP_VERSION} n'a pas pu démarrer.\n\n{exc}"
-            )
-            r.destroy()
-        except Exception:
-            print(f"ERREUR AU DÉMARRAGE : {exc}")
-        raise
-
-    if missing:
-        app.after(
-            250,
-            lambda: messagebox.showwarning(
-                "Dépendances",
-                "Commandes manquantes : " + ", ".join(missing)
-            )
-        )
-
-    app.mainloop()
+    main()

@@ -1,6 +1,6 @@
 [project]
 name = "mdadm-manager"
-version = "1.48"
+version = "1.49"
 description = "Matrix-style graphical mdadm RAID manager for Linux"
 readme = "README.md"
 requires-python = ">=3.11"

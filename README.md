@@ -12,11 +12,11 @@ It provides a Matrix-style graphical interface for RAID creation, monitoring, di
 
 ## Current Version
 
-### **v1.48 RC1**
+### **v1.49 RC1**
 
 **Release Candidate — Final testing phase**
 
-MDADM Manager v1.48 RC1 represents a major evolution of the project since the original public beta v1.29.
+MDADM Manager v1.49 RC1 represents a major evolution of the project since the original public beta v1.29.
 
 The application is now close to feature-complete, but additional testing is still required before v1.48 is declared stable.
 
@@ -59,6 +59,26 @@ Load, inspect, scan, save, and back up the system `mdadm.conf` configuration dir
 ![MDADM Manager RAID Information](screenshots/raid-info.png)
 
 Built-in visual reference for RAID 0, RAID 1, RAID 5, RAID 6, RAID 10 and other supported RAID concepts, including minimum disks, fault tolerance, usable capacity, advantages, and risks.
+
+---
+
+
+## Modular Architecture
+
+Starting with **v1.49 RC1**, MDADM Manager uses a modular source layout while keeping a small versioned launcher for compatibility.
+
+```text
+mdadm_manager_v1.49.py      # Compatibility launcher
+mdadm_matrix/
+├── __init__.py             # Application version metadata
+├── i18n.py                 # French / English interface translations
+├── system.py               # System commands and privilege escalation
+├── core.py                 # RAID discovery, SMART and safety checks
+├── gui.py                  # Tkinter interface and RAID workflows
+└── main.py                 # Application startup
+```
+
+Source-code comments are maintained in **English only**. The graphical interface remains bilingual (French / English).
 
 ---
 
@@ -388,7 +408,7 @@ uv run python -c "import tkinter; print('Tkinter OK')"
 Recommended command:
 
 ```bash
-uv run python mdadm_manager_v1.48.py
+uv run python mdadm_manager_v1.49.py
 ```
 
 The application performs operations that may require administrative privileges. When required, MDADM Manager can relaunch itself through the available graphical privilege helper.
@@ -404,7 +424,7 @@ From inside the repository:
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.48.py
+uv run python mdadm_manager_v1.49.py
 ```
 
 If the project later gains Python dependencies, `uv sync` will install the exact environment described by the project configuration and lock file.
@@ -423,7 +443,7 @@ uv sync
 Then launch again:
 
 ```bash
-uv run python mdadm_manager_v1.48.py
+uv run python mdadm_manager_v1.49.py
 ```
 
 ---
@@ -441,13 +461,13 @@ uv sync
 Run the application:
 
 ```bash
-uv run python mdadm_manager_v1.48.py
+uv run python mdadm_manager_v1.49.py
 ```
 
 Check Python syntax without starting the GUI:
 
 ```bash
-uv run python -m py_compile mdadm_manager_v1.48.py
+uv run python -m py_compile mdadm_manager_v1.49.py
 ```
 
 The project intentionally remains a single-file Python application. `package = false` tells uv that MDADM Manager should be treated as an application/script project rather than built and installed as a Python package.
@@ -508,14 +528,14 @@ Confirm that `kdesu` or `pkexec` is available before retrying.
 `uv` is recommended for development and deployment, but the application can still be run directly with the system Python:
 
 ```bash
-python3 mdadm_manager_v1.48.py
+python3 mdadm_manager_v1.49.py
 ```
 
 ---
 
 ## Current Testing Status
 
-v1.48 RC1 is **almost complete** and is currently in final testing.
+v1.49 RC1 is **almost complete** and is currently in final testing.
 
 Areas that still require additional real-world testing include:
 
@@ -540,13 +560,13 @@ Areas that still require additional real-world testing include:
 
 ## Release Status
 
-**Current release: v1.48 RC1**
+**Current release: v1.49 RC1**
 
 This version is published as a **pre-release / release candidate**.
 
 Once final testing is complete, it will become:
 
-### **MDADM Manager v1.48 Stable**
+### **MDADM Manager v1.49 Stable**
 
 ---
 
