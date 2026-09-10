@@ -60,6 +60,8 @@ Load, inspect, scan, save, and back up the system `mdadm.conf` configuration dir
 
 Built-in visual reference for RAID 0, RAID 1, RAID 5, RAID 6, RAID 10 and other supported RAID concepts, including minimum disks, fault tolerance, usable capacity, advantages, and risks.
 
+---
+
 ## Main Features
 
 - Graphical management of Linux `mdadm` RAID arrays
@@ -219,17 +221,7 @@ Temperature is now displayed in:
 - Disks tab
 - Create RAID disk selection
 
-Example:
-
-```text
-31 °C
-```
-
-If a drive does not report temperature, the interface displays:
-
-```text
-—
-```
+If a drive does not report temperature, the interface displays `—`.
 
 ---
 
@@ -288,45 +280,236 @@ These protections do **not** replace verified backups.
 
 ---
 
-## Requirements
+# Installation and deployment with uv
 
-MDADM Manager is designed primarily for Linux systems using `mdadm`.
+MDADM Manager now includes a `pyproject.toml` configuration for **uv**.
 
-Typical requirements include:
+`uv` is used to create and manage the Python environment. The RAID utilities and Tkinter remain **system packages** because they interact directly with Linux and the graphical desktop.
 
-```text
-Python 3
-python3-tk
-mdadm
-smartmontools
-lsblk
-util-linux
+The project is configured with:
+
+```toml
+[tool.uv]
+package = false
+python-preference = "only-system"
 ```
 
-Depending on the distribution and desktop environment, privilege escalation may use tools such as:
+Using the system Python is intentional: on Debian, Tkinter is supplied by the `python3-tk` system package. This avoids creating an environment with a separately downloaded Python interpreter that may not include Tk support.
 
-```text
-pkexec
-kdesu
+## 1. Install system requirements
+
+### Debian / Ubuntu
+
+```bash
+sudo apt update
+sudo apt install -y \
+  python3 \
+  python3-tk \
+  mdadm \
+  smartmontools \
+  util-linux \
+  git \
+  curl
+```
+
+### KDE Plasma — recommended privilege helper
+
+```bash
+sudo apt install -y kde-cli-tools
+```
+
+`pkexec` may also be used as a fallback depending on the distribution and desktop configuration.
+
+Verify the important commands:
+
+```bash
+python3 --version
+python3 -c "import tkinter; print('Tkinter OK')"
+mdadm --version
+smartctl --version
+lsblk --version
 ```
 
 ---
 
-## Running MDADM Manager
+## 2. Install uv
 
-Make the script executable:
+Install `uv` with the official Astral installer:
 
 ```bash
-chmod +x mdadm_manager_v1.48.py
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Then run it:
+Then restart the terminal or reload the shell configuration if required.
+
+Verify the installation:
+
+```bash
+uv --version
+```
+
+---
+
+## 3. Clone MDADM Manager
+
+```bash
+git clone https://github.com/st3ph666/MDADM-Manager.git
+cd MDADM-Manager
+```
+
+---
+
+## 4. Create/synchronize the uv environment
+
+```bash
+uv sync
+```
+
+`uv` creates the local `.venv` environment automatically.
+
+MDADM Manager currently has no third-party Python package dependencies, so the Python environment is intentionally minimal. Linux utilities such as `mdadm`, `smartctl`, `lsblk`, Tkinter, and privilege helpers are installed by the operating system rather than from PyPI.
+
+To verify which Python interpreter uv selected:
+
+```bash
+uv run python -c "import sys; print(sys.executable)"
+```
+
+Verify Tkinter from the uv environment:
+
+```bash
+uv run python -c "import tkinter; print('Tkinter OK')"
+```
+
+---
+
+## 5. Run MDADM Manager
+
+Recommended command:
+
+```bash
+uv run python mdadm_manager_v1.48.py
+```
+
+The application performs operations that may require administrative privileges. When required, MDADM Manager can relaunch itself through the available graphical privilege helper.
+
+Do **not** run `uv sync` with `sudo`. The `.venv` should belong to the normal user.
+
+---
+
+## Updating an existing installation
+
+From inside the repository:
+
+```bash
+git pull
+uv sync
+uv run python mdadm_manager_v1.48.py
+```
+
+If the project later gains Python dependencies, `uv sync` will install the exact environment described by the project configuration and lock file.
+
+---
+
+## Clean rebuild of the Python environment
+
+If the local virtual environment becomes damaged or inconsistent:
+
+```bash
+rm -rf .venv
+uv sync
+```
+
+Then launch again:
+
+```bash
+uv run python mdadm_manager_v1.48.py
+```
+
+---
+
+## Development workflow with uv
+
+Clone and initialize:
+
+```bash
+git clone https://github.com/st3ph666/MDADM-Manager.git
+cd MDADM-Manager
+uv sync
+```
+
+Run the application:
+
+```bash
+uv run python mdadm_manager_v1.48.py
+```
+
+Check Python syntax without starting the GUI:
+
+```bash
+uv run python -m py_compile mdadm_manager_v1.48.py
+```
+
+The project intentionally remains a single-file Python application. `package = false` tells uv that MDADM Manager should be treated as an application/script project rather than built and installed as a Python package.
+
+---
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named '_tkinter'`
+
+Make sure Debian/Ubuntu Tkinter support is installed:
+
+```bash
+sudo apt install python3-tk
+```
+
+Then rebuild the environment:
+
+```bash
+rm -rf .venv
+uv sync
+```
+
+### `No system Python installation found`
+
+The project deliberately uses the system Python. Install it first:
+
+```bash
+sudo apt install python3 python3-tk
+```
+
+Then run:
+
+```bash
+uv sync
+```
+
+### `mdadm` or `smartctl` not found
+
+```bash
+sudo apt install mdadm smartmontools
+```
+
+### Privilege window does not appear on KDE
+
+Install the KDE command-line helper:
+
+```bash
+sudo apt install kde-cli-tools
+```
+
+Confirm that `kdesu` or `pkexec` is available before retrying.
+
+---
+
+## Traditional launch without uv
+
+`uv` is recommended for development and deployment, but the application can still be run directly with the system Python:
 
 ```bash
 python3 mdadm_manager_v1.48.py
 ```
-
-The application may request administrative privileges because RAID and SMART operations often require root access.
 
 ---
 
