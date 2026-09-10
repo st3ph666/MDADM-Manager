@@ -74,13 +74,16 @@ mdadm_matrix/
 ├── i18n.py                 # French / English interface translations
 ├── system.py               # System commands and privilege escalation
 ├── core.py                 # RAID discovery, SMART and safety checks
-├── gui.py                  # Tkinter interface and RAID workflows
+├── gui_common.py           # Shared Tkinter helpers
+├── wizard.py               # RAID creation wizard
+├── app.py                  # Main Tkinter application and RAID workflows
 └── main.py                 # Application startup
 ```
 
 Source-code comments are maintained in **English only**. The graphical interface remains bilingual (French / English).
 
 ---
+
 
 ## Main Features
 
