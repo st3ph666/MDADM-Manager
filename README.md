@@ -2,100 +2,87 @@
 
 **MDADM Manager** is a graphical RAID management and monitoring application for Linux built around `mdadm`.
 
-It provides a Matrix-style graphical interface for RAID creation, monitoring, SMART diagnostics, disk health, and RAID maintenance.
-
-> ⚠️ **BETA SOFTWARE**
->
-> This project performs privileged disk and RAID operations. Always keep verified backups and review sensitive operations before confirming them.
+> ⚠️ **BETA SOFTWARE** — RAID operations can cause permanent data loss. Keep verified backups and review every destructive action before confirming it.
 
 ---
 
 ## Current Version
 
-### **v1.59**
+### **v1.60**
 
-MDADM Manager v1.59 adds intelligent SATA CRC trend monitoring and a guided maintenance assistant, while keeping the safer RAID reintegration workflow introduced in v1.58.
+Version 1.60 adds a live **Spare / Rebuild progress panel** to the RAID management screen.
 
-### CRC monitoring changes
+The application now reads `/proc/mdstat` while a RAID operation is active and displays:
 
-A non-zero historical `UDMA_CRC_Error_Count` is no longer treated as an alert by itself.
+- rebuild/recovery/resync/reshape/check/repair state;
+- live percentage;
+- progress bar;
+- reconstructed blocks versus total blocks;
+- current rebuild speed;
+- estimated remaining time when mdadm provides it.
 
-The application now stores CRC history by disk identity and compares readings over time:
-
-- stable historical CRC count → `OK`;
-- isolated old value such as `1` → `OK`;
-- +3 CRC errors or more within 10 minutes → `CRC À SURVEILLER — HAUSSE RAPIDE`;
-- +10 CRC errors or more within 10 minutes → `CRC EN HAUSSE RAPIDE`.
-
-The history is stored under the user's configuration directory in `~/.config/mdadm-manager/crc_history.json`.
-
-### Guided diagnostic / maintenance assistant
-
-The Manage RAID screen now includes an assistant entry point with two modes:
-
-1. **Cable SATA / CRC / connection**
-   - select a physical disk;
-   - capture a reference CRC value;
-   - capture a new value later;
-   - compare the delta and elapsed time;
-   - report whether the CRC count is stable or increasing rapidly.
-
-2. **RAID disk**
-   - reuses the existing safe RAID member replacement / reintegration workflow;
-   - recognizes a returning previous member using Array UUID and previous slot;
-   - shows disk/RAID Events before reintegration;
-   - prefers `--re-add` for an exact previous-member match;
-   - keeps normal replacement for a genuinely new disk.
+The panel refreshes every second and automatically detects a rebuild that was already running before MDADM Manager was opened.
 
 ---
 
-## Modular Architecture
+## Recent improvements
+
+### v1.60 — Rebuild monitoring
+
+During a rebuild, the Manage RAID screen can now show information such as:
 
 ```text
-mdadm_manager_v1.59.py      # Compatibility launcher
+RECOVERY : 63.4%  |  142.7 MB/s  |  reste ~42 min
+Blocs : 619200000 / 976620544
+```
+
+When no operation is active, the panel displays:
+
+```text
+Aucune reconstruction en cours
+```
+
+### v1.59 — CRC and maintenance assistant
+
+- SMART CRC values are tracked over time instead of warning on a single historical value.
+- A stable historical CRC count remains normal.
+- CRC warnings are based on increases over time.
+- The maintenance assistant provides guided cable/connection diagnostics and access to RAID disk replacement workflows.
+
+### v1.58 — RAID member reintegration
+
+- Detects a returning previous member using Array UUID and previous RAID slot.
+- Compares disk Events with RAID Events.
+- Attempts `mdadm --re-add` first for an exact previous-member match.
+- Blocks automatic reintegration of a member belonging to a different slot or another array.
+
+---
+
+## Modular architecture
+
+```text
+mdadm_manager_v1.60.py
 mdadm_matrix/
-├── __init__.py             # Application version metadata
-├── i18n.py                 # French / English interface translations
-├── system.py               # System commands and privilege handling
-├── core.py                 # RAID discovery, SMART and safety checks
-├── gui_common.py           # Shared Tkinter helpers
-├── wizard.py               # RAID creation wizard
-├── replacement.py          # RAID member replacement / reintegration
-├── crc_monitor.py          # Persistent CRC history and trend detection
-├── crc_assistant.py        # Before/after CRC comparison assistant
-├── assistant.py            # Diagnostic assistant selector
-├── app.py                  # Main Tkinter application
-└── main.py                 # Startup and feature installation
+├── app.py
+├── assistant.py
+├── core.py
+├── crc_assistant.py
+├── crc_monitor.py
+├── gui_common.py
+├── i18n.py
+├── main.py
+├── rebuild_monitor.py
+├── rebuild_ui.py
+├── replacement.py
+├── system.py
+└── wizard.py
 ```
 
 ---
 
-## Main Features
+## Installation
 
-- Graphical management of Linux `mdadm` RAID arrays
-- RAID creation wizard
-- RAID member detection and status display
-- Previous-member reintegration with `--re-add`
-- Array UUID and previous-slot validation
-- RAID/disk Events comparison
-- Normal replacement workflow for new disks
-- SMART monitoring for HDD, SATA SSD, and NVMe
-- Disk temperature display
-- Persistent CRC trend monitoring
-- Guided CRC before/after comparison
-- HDD statistical risk indicator
-- SSD/NVMe wear and endurance information
-- RAID member safety checks
-- `/etc/fstab` and superblock protection checks
-- French / English interface
-- Progressive startup and background SMART scanning
-- Matrix-style interface
-
----
-
-## Installation with uv
-
-### Debian / Ubuntu requirements
+### Debian / Ubuntu
 
 ```bash
 sudo apt update
@@ -108,62 +95,38 @@ For KDE Plasma:
 sudo apt install -y kde-cli-tools
 ```
 
-Install `uv`:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Clone and initialize:
+Clone the repository:
 
 ```bash
 git clone https://github.com/st3ph666/MDADM-Manager.git
 cd MDADM-Manager
-uv sync
 ```
 
-Run the current version:
+### Run with uv
 
 ```bash
-uv run python mdadm_manager_v1.59.py
+uv sync
+uv run python mdadm_manager_v1.60.py
 ```
 
-Do not run `uv sync` with `sudo`.
+### Run with system Python
+
+```bash
+python3 mdadm_manager_v1.60.py
+```
 
 ### Update an existing installation
 
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.59.py
+uv run python mdadm_manager_v1.60.py
 ```
-
-### Traditional launch
-
-```bash
-python3 mdadm_manager_v1.59.py
-```
-
----
-
-## RAID member reintegration
-
-When a RAID contains a `removed` member and the original disk becomes visible again, MDADM Manager analyzes candidate devices with `mdadm --examine`.
-
-An exact previous member requires matching Array UUID, matching previous RAID slot, and readable mdadm metadata. The assistant shows model, serial, previous role, disk Events, RAID Events, and the Events difference before reintegration.
-
-A candidate belonging to the same array but to a different previous slot is blocked from automatic reintegration. Metadata from another array is also protected from automatic overwrite.
 
 ---
 
 ## Safety
 
-Incorrect RAID operations can cause permanent data loss. The application includes RAID membership checks, filesystem/mount checks, `/etc/fstab` protection, mdadm superblock checks, and confirmations before sensitive operations. These protections do not replace verified backups.
+MDADM Manager includes RAID membership checks, filesystem/mount checks, `/etc/fstab` protections, mdadm superblock checks, and confirmation dialogs before sensitive operations. These protections do not replace backups.
 
----
-
-## Development
-
-MDADM Manager is actively developed and tested on Linux. Bug reports and testing feedback are welcome.
-
-**Current release: v1.59**
+**Current release: v1.60**
