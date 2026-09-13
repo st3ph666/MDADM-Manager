@@ -8,20 +8,28 @@
 
 ## Current Version
 
-### **v1.60**
+### **v1.61**
 
-Version 1.60 adds a live **Spare / Rebuild progress panel** to the RAID management screen.
+Version 1.61 fixes and improves the live rebuild display introduced in v1.60.
 
-The application now reads `/proc/mdstat` while a RAID operation is active and displays:
+### v1.61 — Rebuild progress fix
 
-- rebuild/recovery/resync/reshape/check/repair state;
-- live percentage;
-- progress bar;
-- reconstructed blocks versus total blocks;
-- current rebuild speed;
-- estimated remaining time when mdadm provides it.
+- fixes `/proc/mdstat` rebuild percentage detection;
+- shows rebuild percentage directly with a rebuilding member when available;
+- keeps the dedicated REBUILD / RESYNC progress panel;
+- displays current percentage, reconstructed blocks, speed and estimated remaining time;
+- refreshes progress continuously while the operation is active;
+- detects recovery, resync, reshape, check and repair operations.
 
-The panel refreshes every second and automatically detects a rebuild that was already running before MDADM Manager was opened.
+Example:
+
+```text
+/dev/sdd1   slot 1   spare rebuilding — 42.7%
+
+REBUILD / RESYNC — PROGRESSION
+RECOVERY : 42.7 %
+Blocs : 417 000 000 / 976 620 544   |   Vitesse : 128.6 MB/s   |   Temps restant : ~54 min
+```
 
 ---
 
@@ -29,18 +37,7 @@ The panel refreshes every second and automatically detects a rebuild that was al
 
 ### v1.60 — Rebuild monitoring
 
-During a rebuild, the Manage RAID screen can now show information such as:
-
-```text
-RECOVERY : 63.4%  |  142.7 MB/s  |  reste ~42 min
-Blocs : 619200000 / 976620544
-```
-
-When no operation is active, the panel displays:
-
-```text
-Aucune reconstruction en cours
-```
+Introduced the live Spare / Rebuild progress monitor based on `/proc/mdstat`.
 
 ### v1.59 — CRC and maintenance assistant
 
@@ -61,7 +58,7 @@ Aucune reconstruction en cours
 ## Modular architecture
 
 ```text
-mdadm_manager_v1.60.py
+mdadm_manager_v1.61.py
 mdadm_matrix/
 ├── app.py
 ├── assistant.py
@@ -106,13 +103,13 @@ cd MDADM-Manager
 
 ```bash
 uv sync
-uv run python mdadm_manager_v1.60.py
+uv run python mdadm_manager_v1.61.py
 ```
 
 ### Run with system Python
 
 ```bash
-python3 mdadm_manager_v1.60.py
+python3 mdadm_manager_v1.61.py
 ```
 
 ### Update an existing installation
@@ -120,7 +117,7 @@ python3 mdadm_manager_v1.60.py
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.60.py
+uv run python mdadm_manager_v1.61.py
 ```
 
 ---
@@ -129,4 +126,4 @@ uv run python mdadm_manager_v1.60.py
 
 MDADM Manager includes RAID membership checks, filesystem/mount checks, `/etc/fstab` protections, mdadm superblock checks, and confirmation dialogs before sensitive operations. These protections do not replace backups.
 
-**Current release: v1.60**
+**Current release: v1.61**
