@@ -1,88 +1,88 @@
-# Historique des versions
+# Version History
 
-Ce fichier conserve l'historique visible du projet MDADM Manager. Les anciennes versions ne sont plus conservées comme scripts actifs à la racine, mais leurs changements restent documentés ici et dans l'historique Git.
+This file preserves the visible release history of MDADM Manager. Older versions are no longer kept as active scripts at the repository root, but their changes remain documented here and in the Git history.
 
 ## v1.75 FULL — 2026-09-13
 
-- consolidation de la version FULL actuelle ;
-- gestion RAID complète et protections avant opérations sensibles ;
-- réintégration d'anciens membres RAID ;
-- suivi des slots, membres absents et identité physique des disques ;
-- outils SMART et diagnostic disque ;
-- assistant câble/SATA et hot-swap ;
-- suivi CRC ;
-- progression reconstruction/recovery/resync/reshape ;
-- améliorations d'interface et de maintenance ;
-- nouvelle série de captures d'écran ;
-- remise à niveau de l'architecture modulaire sur la base du moteur v1.75 ;
-- métadonnées `uv` synchronisées sur v1.75.
+- consolidated the current FULL release;
+- complete RAID management with safeguards before sensitive operations;
+- reintegration of previous RAID members;
+- RAID slot tracking, missing-member detection, and physical disk identity tracking;
+- SMART tools and disk diagnostics;
+- cable/SATA and hot-swap assistant;
+- CRC monitoring;
+- rebuild/recovery/resync/reshape progress monitoring;
+- interface and maintenance improvements;
+- new screenshot series;
+- updated the modular architecture to use the v1.75 engine as its reference;
+- synchronized `uv` metadata with v1.75.
 
-## v1.62 à v1.74 — développements intermédiaires
+## v1.62 to v1.74 — Intermediate Development Releases
 
-Ces numéros correspondent à des évolutions intermédiaires ayant mené au script v1.75 FULL. Ils n'ont pas tous été publiés séparément dans le dépôt GitHub avec un commit de release identifiable. Leurs changements sont donc conservés dans la version FULL consolidée plutôt que décrits artificiellement version par version.
+These version numbers correspond to intermediate development stages that led to the v1.75 FULL script. Not all of them were published separately in the GitHub repository with an identifiable release commit. Their changes are therefore preserved in the consolidated FULL release rather than being artificially documented version by version.
 
-Cette section sera complétée si les anciens scripts ou notes de versions correspondants sont ajoutés au dépôt.
+This section can be expanded if the corresponding older scripts or release notes are later added to the repository.
 
 ## v1.61 — 2026-09-13
 
-- correction de la détection du pourcentage de reconstruction dans `/proc/mdstat` ;
-- affichage du pourcentage directement sur le membre en reconstruction ;
-- panneau dédié REBUILD / RESYNC ;
-- affichage des blocs reconstruits, de la vitesse et du temps restant ;
-- détection recovery, resync, reshape, check et repair.
+- fixed rebuild percentage detection from `/proc/mdstat`;
+- displayed the rebuild percentage directly on the rebuilding member;
+- added a dedicated REBUILD / RESYNC panel;
+- displayed rebuilt blocks, speed, and estimated remaining time;
+- added detection for recovery, resync, reshape, check, and repair operations.
 
 ## v1.60 — 2026-09-13
 
-- ajout du suivi temps réel de reconstruction RAID ;
-- lecture de `/proc/mdstat` ;
-- ajout du panneau de progression rebuild/resync.
+- added real-time RAID rebuild monitoring;
+- added `/proc/mdstat` parsing;
+- added a rebuild/resync progress panel.
 
 ## v1.59 — 2026-09-13
 
-- ajout du suivi de tendance CRC ;
-- distinction entre une ancienne valeur CRC stable et une hausse active ;
-- ajout de l'assistant CRC avant/après ;
-- ajout de l'assistant de maintenance et de remplacement.
+- added CRC trend monitoring;
+- distinguished between an old stable CRC value and an actively increasing CRC count;
+- added the CRC before/after assistant;
+- added maintenance and replacement assistance.
 
 ## v1.58 — 2026-09-13
 
-- réintégration sécurisée d'un ancien membre RAID ;
-- validation de l'Array UUID ;
-- vérification de l'ancien slot RAID ;
-- comparaison du compteur Events ;
-- tentative `mdadm --re-add` lorsqu'un ancien membre correspond exactement ;
-- détection des candidats de remplacement.
+- added safe reintegration of a previous RAID member;
+- added Array UUID validation;
+- added previous RAID slot verification;
+- added Events counter comparison;
+- added `mdadm --re-add` attempts when a previous member matches exactly;
+- added replacement candidate detection.
 
 ## v1.56 — 2026-09-13
 
-- activation du mécanisme de réintégration RAID ;
-- intégration de la réintégration sécurisée des anciens membres ;
-- mise à jour du lanceur courant.
+- enabled the RAID member reintegration mechanism;
+- integrated safe reintegration of previous members;
+- updated the current launcher.
 
 ## v1.49 — 2026-09-10
 
-- première refactorisation importante vers `mdadm_matrix/` ;
-- séparation des composants principaux en modules ;
-- amélioration de la détection des limites entre modules ;
-- séparation de plusieurs composants GUI ;
-- ajout de la configuration `uv` et de la documentation de déploiement.
+- introduced the first major refactoring into `mdadm_matrix/`;
+- separated major application components into modules;
+- improved module-boundary detection;
+- separated several GUI components;
+- added `uv` configuration and deployment documentation.
 
 ## v1.48 RC1 — 2026-09-06
 
-- publication de la version RC1 ;
-- base de gestion RAID, SMART, informations disque et interface Matrix utilisée pour les versions suivantes.
+- published the RC1 release;
+- established the RAID management, SMART, disk information, and Matrix interface foundation used by later releases.
 
 ## v1.29 — 2026-09-05
 
-- première version bêta publique ;
-- gestion et surveillance RAID ;
-- assistant de création RAID ;
-- informations SMART ;
-- protections RAID/FSTAB ;
-- effacement sécurisé des anciens superblocks avec confirmations.
+- first public beta release;
+- RAID management and monitoring;
+- RAID creation wizard;
+- SMART information;
+- RAID/FSTAB safeguards;
+- safe removal of old superblocks with confirmation prompts.
 
 ---
 
-## Politique pour les prochaines versions
+## Policy for Future Releases
 
-À partir de v1.75, chaque nouvelle version publiée doit ajouter une entrée dans ce fichier avant ou pendant le commit de release. Le dépôt peut ne conserver que le script/lanceur courant, mais l'historique des versions ne doit plus être supprimé.
+Starting with v1.75, every newly published version must add an entry to this file before or as part of the release commit. The repository may keep only the current script/launcher active, but the version history must never be removed.
