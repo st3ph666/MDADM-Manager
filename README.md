@@ -8,15 +8,23 @@
 
 ## Current Version
 
-### **v1.75 FULL**
+### **v1.75 FULL / MODULAR**
 
-The current release is the full MDADM Manager build with the latest RAID management, monitoring, SMART diagnostics, member reintegration, rebuild tracking, maintenance tools and interface improvements.
+The v1.75 FULL build remains the complete reference engine while the official modular launcher now runs through `mdadm_matrix/`. This keeps every v1.75 feature available while the code is progressively separated into maintainable modules.
 
-Main script:
+Official modular launcher:
+
+```text
+mdadm_manager_v1.75.py
+```
+
+Complete v1.75 reference engine:
 
 ```text
 mdadm_manager_v1.75_full.py
 ```
+
+The full version history is preserved in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -57,9 +65,28 @@ mdadm_manager_v1.75_full.py
 ## Modular architecture
 
 ```text
-mdadm_manager_v1.75_full.py
+mdadm_manager_v1.75.py        # official launcher
+mdadm_manager_v1.75_full.py   # complete v1.75 reference engine
 mdadm_matrix/
+├── __init__.py
+├── __main__.py
+├── main.py
+├── full_engine.py
+├── app.py
+├── assistant.py
+├── core.py
+├── crc_assistant.py
+├── crc_monitor.py
+├── gui_common.py
+├── i18n.py
+├── rebuild_monitor.py
+├── rebuild_ui.py
+├── replacement.py
+├── system.py
+└── wizard.py
 ```
+
+`full_engine.py` provides a compatibility bridge to the complete v1.75 engine. This prevents functions added after the older modular build from being lost during the refactor. Components can then be migrated module by module without changing user-visible behavior.
 
 ---
 
@@ -89,13 +116,19 @@ cd MDADM-Manager
 
 ```bash
 uv sync
-uv run python mdadm_manager_v1.75_full.py
+uv run python mdadm_manager_v1.75.py
+```
+
+Or launch the package directly:
+
+```bash
+uv run python -m mdadm_matrix
 ```
 
 ### Run with system Python
 
 ```bash
-python3 mdadm_manager_v1.75_full.py
+python3 mdadm_manager_v1.75.py
 ```
 
 ### Update an existing installation
@@ -103,8 +136,14 @@ python3 mdadm_manager_v1.75_full.py
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.75_full.py
+uv run python mdadm_manager_v1.75.py
 ```
+
+---
+
+## Version history
+
+The repository keeps only the current active launcher, but release history is preserved in [`CHANGELOG.md`](CHANGELOG.md). Known published milestones include v1.29, v1.48 RC1, v1.49, v1.56, v1.58, v1.59, v1.60, v1.61 and v1.75 FULL. Intermediate v1.62-v1.74 builds are identified as development builds when no separate release record exists in Git history.
 
 ---
 
@@ -112,4 +151,4 @@ uv run python mdadm_manager_v1.75_full.py
 
 MDADM Manager includes RAID membership checks, filesystem and mount checks, `/etc/fstab` protections, mdadm superblock checks, and confirmation dialogs before sensitive operations. These protections do not replace verified backups.
 
-**Current release: v1.75 FULL**
+**Current release: v1.75 FULL / MODULAR**
