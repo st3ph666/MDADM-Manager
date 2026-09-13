@@ -1,4 +1,4 @@
-"""Application entry point for MDADM Manager."""
+"""Point d'entrée de MDADM Manager."""
 
 import os
 import shutil
@@ -8,18 +8,19 @@ from tkinter import messagebox
 from . import APP_VERSION
 from .system import relaunch_as_root
 from .app import MdadmManager
+from .replacement import installer_mecanisme_remplacement
 
 # =============================================================================
 
 
-# Checks at startup that required system commands are available.
+# Vérifie au démarrage que les commandes système indispensables sont disponibles.
 def dependency_check():
-
     missing = []
     for exe in ("mdadm", "lsblk"):
         if not shutil.which(exe):
             missing.append(exe)
     return missing
+
 
 def main():
         if os.geteuid() != 0:
@@ -43,10 +44,13 @@ def main():
 
         missing = dependency_check()
 
+        # Active l'assistant de remplacement capable de reconnaître un ancien membre
+        # grâce à l'UUID du RAID, son ancien rôle et son compteur Events.
+        installer_mecanisme_remplacement(MdadmManager)
+
         try:
             app = MdadmManager()
         except Exception as exc:
-
             try:
                 r = tk.Tk()
                 r.withdraw()
@@ -69,6 +73,7 @@ def main():
             )
 
         app.mainloop()
+
 
 if __name__ == "__main__":
     main()
