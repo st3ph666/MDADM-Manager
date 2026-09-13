@@ -4,7 +4,7 @@
 
 It provides a Matrix-style graphical interface for RAID creation, monitoring, disk health inspection, SMART diagnostics, and common RAID maintenance tasks.
 
-> ⚠️ **RELEASE CANDIDATE / BETA SOFTWARE**
+> ⚠️ **BETA SOFTWARE**
 >
 > This project performs privileged disk and RAID operations. Always keep verified backups of important data and carefully review operations before confirming destructive actions.
 
@@ -12,63 +12,22 @@ It provides a Matrix-style graphical interface for RAID creation, monitoring, di
 
 ## Current Version
 
-### **v1.49 RC1**
+### **v1.58**
 
-**Release Candidate — Final testing phase**
+MDADM Manager v1.58 adds safer RAID member replacement and previous-member reintegration.
 
-MDADM Manager v1.49 RC1 represents a major evolution of the project since the original public beta v1.29.
+When a RAID slot is missing, the replacement assistant can identify a returning previous member using the array UUID and previous RAID slot. It also displays the RAID and disk event counters before reintegration.
 
-The application is now close to feature-complete, but additional testing is still required before v1.48 is declared stable.
-
----
-
-## Screenshots
-
-### Dashboard
-
-![MDADM Manager Dashboard](https://raw.githubusercontent.com/st3ph666/MDADM-Manager/main/screenshots/dashboard.png)
-
-Monitor mdadm arrays, RAID state, capacity, mounted filesystems, member disks, SMART information, and maintenance actions from the main dashboard.
-
-### Create RAID Wizard
-
-![MDADM Manager Create RAID Wizard](screenshots/create-raid.png)
-
-Guided RAID creation with RAID-level explanations, disk analysis, SMART checks, safety protections, capacity estimates, and final command verification.
-
-### Manage RAID
-
-![MDADM Manager Manage RAID](screenshots/manage-raid.png)
-
-Manage existing arrays and their members, including array details, assemble/stop/check/repair operations, member replacement and removal, SMART information, disk errors, usage, and temperature.
-
-### Disks & SMART Monitoring
-
-![MDADM Manager Disks and SMART Monitoring](screenshots/disks-smart.png)
-
-View physical disks, model and serial information, temperatures, RAID membership, RAID state, SMART health, error indicators, and disk usage information in one place.
-
-### mdadm Configuration
-
-![MDADM Manager mdadm Configuration](screenshots/mdadm-configuration.png)
-
-Load, inspect, scan, save, and back up the system `mdadm.conf` configuration directly from the graphical interface.
-
-### RAID Information
-
-![MDADM Manager RAID Information](screenshots/raid-info.png)
-
-Built-in visual reference for RAID 0, RAID 1, RAID 5, RAID 6, RAID 10 and other supported RAID concepts, including minimum disks, fault tolerance, usable capacity, advantages, and risks.
+For an exact previous-member match, the program preserves the existing mdadm superblock and attempts `mdadm --re-add` before offering a normal `--add`. A disk from the same array but a different previous slot, or a disk containing metadata from another array, is blocked from automatic reintegration.
 
 ---
-
 
 ## Modular Architecture
 
-Starting with **v1.49 RC1**, MDADM Manager uses a modular source layout while keeping a small versioned launcher for compatibility.
+MDADM Manager uses a modular source layout with a small versioned compatibility launcher:
 
 ```text
-mdadm_manager_v1.49.py      # Compatibility launcher
+mdadm_manager_v1.58.py      # Compatibility launcher
 mdadm_matrix/
 ├── __init__.py             # Application version metadata
 ├── i18n.py                 # French / English interface translations
@@ -76,526 +35,125 @@ mdadm_matrix/
 ├── core.py                 # RAID discovery, SMART and safety checks
 ├── gui_common.py           # Shared Tkinter helpers
 ├── wizard.py               # RAID creation wizard
+├── replacement.py          # RAID member replacement / reintegration
 ├── app.py                  # Main Tkinter application and RAID workflows
 └── main.py                 # Application startup
 ```
 
-Source-code comments are maintained in **English only**. The graphical interface remains bilingual (French / English).
-
 ---
-
 
 ## Main Features
 
 - Graphical management of Linux `mdadm` RAID arrays
 - RAID creation wizard
 - RAID member detection and status display
+- Safe previous-member reintegration with `--re-add`
+- Array UUID and previous-slot validation before reintegration
+- RAID/disk Events comparison
+- Normal replacement workflow for new disks
+- Protection against automatically using a member from the wrong RAID slot
 - Disk and RAID health monitoring
 - SMART monitoring for HDD, SATA SSD, and NVMe drives
 - Disk temperature display
 - SMART error and sector monitoring
 - HDD statistical risk indicator
 - SSD/NVMe wear and endurance information
-- TB written calculation when supported
 - RAID member safety checks
 - `/etc/fstab` protection checks
 - RAID superblock protection checks
 - French / English interface
-- Progressive startup for faster GUI display
-- Background SMART scanning
-- Matrix-style black and green interface
-- Beginner-friendly bilingual source-code comments
+- Progressive startup and background SMART scanning
+- Matrix-style interface
 
 ---
 
-## Major Improvements Since v1.29
+## Installation and deployment with uv
 
-### Code organization
-
-The source code has been reorganized into clear logical sections:
-
-1. Internationalization / translations
-2. System commands and privileges
-3. RAID and device detection
-4. SMART and disk health
-5. RAID, FSTAB, and superblock safety
-6. GUI infrastructure
-7. RAID creation wizard
-8. Main application
-9. Startup and dependency handling
-
-Extensive beginner-friendly comments were also added throughout the code.
-
----
-
-## French / English Support
-
-The application now includes expanded bilingual support.
-
-Improvements include:
-
-- French and English interface
-- RAID creation wizard translation
-- RAID management translation
-- SMART diagnostic translation
-- Dynamic language switching
-- Language menu
-- Bilingual beginner-friendly comments in the source code
-
----
-
-## Startup and Performance
-
-Startup behavior has been significantly improved.
-
-The application now:
-
-- Displays the main interface before long SMART operations finish
-- Performs SMART scans in the background
-- Uses non-blocking disk refresh operations
-- Loads tabs progressively
-- Prioritizes a tab when the user selects it before background loading is complete
-- Reduces startup delays on systems with many disks
-
-Several startup crashes caused by widgets being accessed before initialization were also corrected.
-
----
-
-## Matrix Interface Improvements
-
-The interface has received several visual improvements:
-
-- Consistent black background
-- Green Matrix-style text
-- Improved Listbox appearance
-- Improved Text and Entry widgets
-- Matrix-style Combobox controls
-- Improved RAID selection readability
-- Removal of white areas during progressive startup
-- More consistent visual behavior between tabs
-
----
-
-## SMART Monitoring
-
-SMART support has been greatly expanded.
-
-### HDD
-
-Available information may include:
-
-- SMART health
-- Temperature
-- Minimum / maximum temperature when reported
-- Power-on hours
-- Power cycles
-- Start / stop cycles
-- Load / unload cycles
-- Reallocated sectors
-- Pending sectors
-- Offline uncorrectable sectors
-- Reported uncorrectable errors
-- Spin retry count
-- Command timeouts
-- UDMA CRC errors
-- Total LBAs written
-- Total LBAs read
-- Actual TB written when the drive exposes the required SMART attribute
-- Statistical HDD risk index
-
-The HDD risk value is a **monitoring indicator**, not an estimate of remaining drive life.
-
-### SATA SSD
-
-Additional SSD information may include:
-
-- SSD wear
-- Remaining life attributes
-- TB written
-- Manufacturer TBW rating when known
-- TBW used percentage
-- TBW remaining percentage
-
-Samsung 870 EVO endurance ratings are supported for known capacities.
-
-### NVMe
-
-NVMe monitoring may include:
-
-- Percentage Used
-- Media and Data Integrity Errors
-- Power-on hours
-- Power cycles
-- Data Units Written
-- Estimated TB written
-- Temperature
-- SMART health
-
----
-
-## Disk Temperature Integration
-
-A compact **Temp** column has been added to the main disk views.
-
-Temperature is now displayed in:
-
-- Dashboard RAID member view
-- Manage RAID
-- Disks tab
-- Create RAID disk selection
-
-If a drive does not report temperature, the interface displays `—`.
-
----
-
-## RAID Creation Wizard
-
-The RAID creation wizard includes:
-
-- RAID level selection
-- Minimum disk requirements
-- Fault-tolerance information
-- RAID level explanations
-- Configuration validation
-- Disk selection
-- SMART information
-- Disk temperature
-- Progress information
-- Safety checks before creation
-
----
-
-## RAID Management
-
-MDADM Manager provides graphical access to RAID information and maintenance operations.
-
-Current features include:
-
-- RAID array detection
-- RAID member display
-- Member state information
-- Physical disk information
-- SMART information for RAID members
-- Disk error indicators
-- Usage information
-- Temperature monitoring
-- RAID safety checks
-
-Because RAID operations can be destructive, the application performs additional validation before sensitive actions.
-
----
-
-## Safety Features
-
-MDADM Manager includes checks intended to reduce accidental data loss.
-
-These include:
-
-- Detection of disks already used by RAID
-- RAID member protection
-- Filesystem checks
-- Mounted filesystem detection
-- `/etc/fstab` checks
-- mdadm superblock checks
-- Confirmation before destructive operations
-
-These protections do **not** replace verified backups.
-
----
-
-# Installation and deployment with uv
-
-MDADM Manager now includes a `pyproject.toml` configuration for **uv**.
-
-`uv` is used to create and manage the Python environment. The RAID utilities and Tkinter remain **system packages** because they interact directly with Linux and the graphical desktop.
-
-The project is configured with:
-
-```toml
-[tool.uv]
-package = false
-python-preference = "only-system"
-```
-
-Using the system Python is intentional: on Debian, Tkinter is supplied by the `python3-tk` system package. This avoids creating an environment with a separately downloaded Python interpreter that may not include Tk support.
-
-## 1. Install system requirements
-
-### Debian / Ubuntu
+### Debian / Ubuntu requirements
 
 ```bash
 sudo apt update
-sudo apt install -y \
-  python3 \
-  python3-tk \
-  mdadm \
-  smartmontools \
-  util-linux \
-  git \
-  curl
+sudo apt install -y python3 python3-tk mdadm smartmontools util-linux git curl
 ```
 
-### KDE Plasma — recommended privilege helper
+For KDE Plasma, the graphical privilege helper is recommended:
 
 ```bash
 sudo apt install -y kde-cli-tools
 ```
 
-`pkexec` may also be used as a fallback depending on the distribution and desktop configuration.
-
-Verify the important commands:
-
-```bash
-python3 --version
-python3 -c "import tkinter; print('Tkinter OK')"
-mdadm --version
-smartctl --version
-lsblk --version
-```
-
----
-
-## 2. Install uv
-
-Install `uv` with the official Astral installer:
+Install `uv`:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Then restart the terminal or reload the shell configuration if required.
-
-Verify the installation:
-
-```bash
-uv --version
-```
-
----
-
-## 3. Clone MDADM Manager
+Clone and initialize the project:
 
 ```bash
 git clone https://github.com/st3ph666/MDADM-Manager.git
 cd MDADM-Manager
-```
-
----
-
-## 4. Create/synchronize the uv environment
-
-```bash
 uv sync
 ```
 
-`uv` creates the local `.venv` environment automatically.
-
-MDADM Manager currently has no third-party Python package dependencies, so the Python environment is intentionally minimal. Linux utilities such as `mdadm`, `smartctl`, `lsblk`, Tkinter, and privilege helpers are installed by the operating system rather than from PyPI.
-
-To verify which Python interpreter uv selected:
+Run the current version:
 
 ```bash
-uv run python -c "import sys; print(sys.executable)"
+uv run python mdadm_manager_v1.58.py
 ```
 
-Verify Tkinter from the uv environment:
+Do not run `uv sync` with `sudo`.
 
-```bash
-uv run python -c "import tkinter; print('Tkinter OK')"
-```
-
----
-
-## 5. Run MDADM Manager
-
-Recommended command:
-
-```bash
-uv run python mdadm_manager_v1.49.py
-```
-
-The application performs operations that may require administrative privileges. When required, MDADM Manager can relaunch itself through the available graphical privilege helper.
-
-Do **not** run `uv sync` with `sudo`. The `.venv` should belong to the normal user.
-
----
-
-## Updating an existing installation
-
-From inside the repository:
+### Updating an existing installation
 
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.49.py
+uv run python mdadm_manager_v1.58.py
 ```
 
-If the project later gains Python dependencies, `uv sync` will install the exact environment described by the project configuration and lock file.
-
----
-
-## Clean rebuild of the Python environment
-
-If the local virtual environment becomes damaged or inconsistent:
+### Traditional launch without uv
 
 ```bash
-rm -rf .venv
-uv sync
-```
-
-Then launch again:
-
-```bash
-uv run python mdadm_manager_v1.49.py
+python3 mdadm_manager_v1.58.py
 ```
 
 ---
 
-## Development workflow with uv
+## RAID member reintegration in v1.58
 
-Clone and initialize:
+When a RAID contains a `removed` member and the original disk becomes visible again, MDADM Manager analyzes candidate devices with `mdadm --examine`.
 
-```bash
-git clone https://github.com/st3ph666/MDADM-Manager.git
-cd MDADM-Manager
-uv sync
-```
+An exact previous member requires:
 
-Run the application:
+- matching Array UUID;
+- matching previous RAID device slot;
+- readable mdadm metadata.
 
-```bash
-uv run python mdadm_manager_v1.49.py
-```
+The interface displays the physical disk, model, serial number, previous role, disk Events, RAID Events, and the Events difference.
 
-Check Python syntax without starting the GUI:
+For an exact match, the first command attempted is:
 
 ```bash
-uv run python -m py_compile mdadm_manager_v1.49.py
+mdadm --manage /dev/mdX --re-add /dev/sdXN
 ```
 
-The project intentionally remains a single-file Python application. `package = false` tells uv that MDADM Manager should be treated as an application/script project rather than built and installed as a Python package.
+The existing superblock is preserved. If `--re-add` fails, the program shows the mdadm error and requires explicit confirmation before a normal `--add` is attempted.
+
+A candidate belonging to the same array but to a different previous slot is blocked from automatic reintegration. Metadata belonging to another array is also protected from automatic overwrite.
 
 ---
 
-## Troubleshooting
+## Safety
 
-### `ModuleNotFoundError: No module named '_tkinter'`
+MDADM Manager performs operations on physical disks and RAID arrays. Incorrect RAID operations can cause permanent data loss.
 
-Make sure Debian/Ubuntu Tkinter support is installed:
-
-```bash
-sudo apt install python3-tk
-```
-
-Then rebuild the environment:
-
-```bash
-rm -rf .venv
-uv sync
-```
-
-### `No system Python installation found`
-
-The project deliberately uses the system Python. Install it first:
-
-```bash
-sudo apt install python3 python3-tk
-```
-
-Then run:
-
-```bash
-uv sync
-```
-
-### `mdadm` or `smartctl` not found
-
-```bash
-sudo apt install mdadm smartmontools
-```
-
-### Privilege window does not appear on KDE
-
-Install the KDE command-line helper:
-
-```bash
-sudo apt install kde-cli-tools
-```
-
-Confirm that `kdesu` or `pkexec` is available before retrying.
-
----
-
-## Traditional launch without uv
-
-`uv` is recommended for development and deployment, but the application can still be run directly with the system Python:
-
-```bash
-python3 mdadm_manager_v1.49.py
-```
-
----
-
-## Current Testing Status
-
-v1.49 RC1 is **almost complete** and is currently in final testing.
-
-Areas that still require additional real-world testing include:
-
-- HDD SMART monitoring
-- SATA SSD SMART monitoring
-- NVMe SMART monitoring
-- Disk temperature reporting
-- RAID creation
-- RAID member removal and replacement
-- Faulty disk operations
-- RAID protection checks
-- `/etc/fstab` protection
-- Background SMART refresh
-- French / English switching
-- Progressive startup
-- Different RAID levels
-- Systems with many disks
-- Different Debian / Linux configurations
-- Different screen resolutions
-
----
-
-## Release Status
-
-**Current release: v1.49 RC1**
-
-This version is published as a **pre-release / release candidate**.
-
-Once final testing is complete, it will become:
-
-### **MDADM Manager v1.49 Stable**
+The application includes RAID membership checks, filesystem/mount checks, `/etc/fstab` protection, mdadm superblock checks, and confirmations before sensitive operations. These protections do not replace verified backups.
 
 ---
 
 ## Development
 
-MDADM Manager is actively developed and tested on Linux.
+MDADM Manager is actively developed and tested on Linux. Bug reports and testing feedback are welcome, especially RAID level, disk models, kernel/distribution version, error output, screenshots, and reproducible steps.
 
-Bug reports, testing feedback, and contributions are welcome.
-
-If you test this release, useful feedback includes:
-
-- Linux distribution and version
-- Kernel version
-- RAID level
-- Number and type of disks
-- HDD / SSD / NVMe models
-- Error message or traceback
-- Screenshot when relevant
-- Steps required to reproduce the problem
-
----
-
-## Disclaimer
-
-MDADM Manager performs operations on physical disks and RAID arrays.
-
-Incorrect RAID operations can cause permanent data loss.
-
-Use this software at your own risk and always maintain verified backups of important data.
+**Current release: v1.58**
