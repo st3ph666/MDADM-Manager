@@ -1,6 +1,6 @@
 # MDADM Manager
 
-**MDADM Manager** is a graphical RAID management and monitoring application for Linux built around `mdadm`.
+**MDADM Manager** is a Matrix-style graphical RAID management, monitoring and recovery application for Linux built around `mdadm`.
 
 > ⚠️ **BETA SOFTWARE** — RAID operations can cause permanent data loss. Keep verified backups and review every destructive action before confirming it.
 
@@ -8,23 +8,23 @@
 
 ## Current Version
 
-### **v1.75 FULL / MODULAR**
+### **v1.76 — FULL / MODULAR**
 
-The v1.75 FULL build remains the complete reference engine while the official modular launcher now runs through `mdadm_matrix/`. This keeps every v1.75 feature available while the code is progressively separated into maintainable modules.
+v1.76 is the current reference engine. The repository also includes the `mdadm_matrix/` modular package, whose launcher loads the v1.76 engine so the application can be refactored progressively without dropping current features or RAID safeguards.
 
-Official modular launcher:
-
-```text
-mdadm_manager_v1.75.py
-```
-
-Complete v1.75 reference engine:
+Current engine:
 
 ```text
-mdadm_manager_v1.75_full.py
+mdadm_manager_v1.76.py
 ```
 
-The full version history is preserved in [`CHANGELOG.md`](CHANGELOG.md).
+Modular package:
+
+```text
+mdadm_matrix/
+```
+
+The repository keeps only the current active application at its root. Older releases remain available through Git history and are documented in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -46,27 +46,44 @@ The full version history is preserved in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Main features
 
-- RAID array detection and monitoring;
-- member status and slot tracking;
-- SMART disk information and diagnostics;
-- CRC monitoring and maintenance assistance;
-- guided disk replacement workflows;
-- previous RAID member reintegration with Array UUID validation;
-- live rebuild / recovery / resync / reshape progress;
+- RAID array detection, monitoring and management;
+- member state, RAID slot and physical disk identity tracking;
+- SMART information, disk diagnostics and HDD/SSD/NVMe health data;
+- CRC trend monitoring that distinguishes old stable counters from active increases;
+- cable / SATA connection assistant;
+- guided hot-swap workflow with safety checks and explicit hardware confirmation;
+- previous RAID member reintegration;
+- automatic recognition of the same reconnected disk using remembered slot/serial information instead of relying only on `/dev/sdX`;
+- Array UUID and mdadm metadata validation before reintegration;
+- read-only reintegration diagnostics;
+- `mdadm --re-add` workflow for a valid previous member;
+- live recovery / rebuild / resync / reshape / check / repair progress;
 - RAID creation and management tools;
-- filesystem, mount and `/etc/fstab` safety checks;
+- filesystem, mount, RAID membership and `/etc/fstab` protections;
+- superblock inspection and guarded cleanup;
 - confirmation dialogs before sensitive operations;
-- modular `mdadm_matrix` architecture;
-- Debian / Ubuntu support;
-- `uv` and system Python launch methods.
+- French / English interface support;
+- root relaunch through KDE `kdesu`, with `pkexec` fallback;
+- modular `mdadm_matrix` architecture.
+
+---
+
+## v1.76 recovery workflow
+
+v1.76 strengthens the maintenance path for the common case where a RAID disk is removed because of a SATA cable or connection problem and the **same physical disk** is later reconnected.
+
+The application records and compares RAID slot information, disk serial identity and mdadm metadata. The device name is not treated as a stable identity because Linux can assign a different `/dev/sdX` name after a disconnect or hot-swap.
+
+The cable / SATA & hot-swap assistant performs its safety analysis before enabling hot-swap preparation. Physical removal is only presented after explicit confirmation that the exact bay, port or backplane supports SATA hot-swap.
+
+For reintegration, the diagnostic path is read-only. When the selected disk is validated as the expected previous member, MDADM Manager can perform the controlled `mdadm --manage <array> --re-add <device>` operation.
 
 ---
 
 ## Modular architecture
 
 ```text
-mdadm_manager_v1.75.py        # official launcher
-mdadm_manager_v1.75_full.py   # complete v1.75 reference engine
+mdadm_manager_v1.76.py        # current complete v1.76 engine
 mdadm_matrix/
 ├── __init__.py
 ├── __main__.py
@@ -86,7 +103,7 @@ mdadm_matrix/
 └── wizard.py
 ```
 
-`full_engine.py` provides a compatibility bridge to the complete v1.75 engine. This prevents functions added after the older modular build from being lost during the refactor. Components can then be migrated module by module without changing user-visible behavior.
+`full_engine.py` is the compatibility bridge to `mdadm_manager_v1.76.py`. Existing modules can be migrated progressively while the current engine remains the functional reference.
 
 ---
 
@@ -96,10 +113,10 @@ mdadm_matrix/
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-tk mdadm smartmontools util-linux git curl
+sudo apt install -y python3 python3-tk mdadm smartmontools util-linux git curl policykit-1
 ```
 
-For KDE Plasma:
+For KDE Plasma root elevation:
 
 ```bash
 sudo apt install -y kde-cli-tools
@@ -112,23 +129,31 @@ git clone https://github.com/st3ph666/MDADM-Manager.git
 cd MDADM-Manager
 ```
 
+### Run the current v1.76 engine
+
+```bash
+python3 mdadm_manager_v1.76.py
+```
+
+The application will request root elevation when needed.
+
+### Run through the modular package
+
+```bash
+python3 -m mdadm_matrix
+```
+
 ### Run with uv
 
 ```bash
 uv sync
-uv run python mdadm_manager_v1.75.py
+uv run python mdadm_manager_v1.76.py
 ```
 
-Or launch the package directly:
+or:
 
 ```bash
 uv run python -m mdadm_matrix
-```
-
-### Run with system Python
-
-```bash
-python3 mdadm_manager_v1.75.py
 ```
 
 ### Update an existing installation
@@ -136,19 +161,23 @@ python3 mdadm_manager_v1.75.py
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.75.py
+uv run python mdadm_manager_v1.76.py
 ```
+
+---
+
+## Safety model
+
+MDADM Manager is designed to put checks immediately before sensitive writes. Depending on the operation, these include RAID membership checks, filesystem and mount checks, `/etc/fstab` protection, mdadm superblock/UUID checks, remembered physical disk identity, candidate validation and explicit confirmation dialogs.
+
+Hot-swap support in the software does **not** make unsupported SATA hardware hot-swappable. The exact controller, port, bay/backplane and firmware/BIOS configuration must support hot-swap before physically disconnecting a powered disk.
+
+These protections reduce operational mistakes but do not replace verified backups.
 
 ---
 
 ## Version history
 
-The repository keeps only the current active launcher, but release history is preserved in [`CHANGELOG.md`](CHANGELOG.md). Known published milestones include v1.29, v1.48 RC1, v1.49, v1.56, v1.58, v1.59, v1.60, v1.61 and v1.75 FULL. Intermediate v1.62-v1.74 builds are identified as development builds when no separate release record exists in Git history.
+See [CHANGELOG.md](CHANGELOG.md) for published milestones and the v1.76 release notes.
 
----
-
-## Safety
-
-MDADM Manager includes RAID membership checks, filesystem and mount checks, `/etc/fstab` protections, mdadm superblock checks, and confirmation dialogs before sensitive operations. These protections do not replace verified backups.
-
-**Current release: v1.75 FULL / MODULAR**
+**Current release: v1.76 FULL / MODULAR**
