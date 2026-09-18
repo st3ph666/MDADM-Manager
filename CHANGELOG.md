@@ -1,5 +1,20 @@
 # Version History
 
+## v1.76 — 2026-09-17
+
+- promoted v1.76 as the current FULL / MODULAR release;
+- improved RAID recovery after SATA cable or connection maintenance;
+- strengthened the workflow for reconnecting and re-adding the same physical disk;
+- added remembered RAID slot / disk identity handling so reintegration does not rely only on a changing `/dev/sdX` name;
+- added read-only RAID re-add diagnostics before modification;
+- improved previous-member candidate detection and controlled `mdadm --re-add` handling;
+- expanded the cable / SATA & hot-swap assistant;
+- added hot-swap safety analysis and explicit confirmation that the exact bay, port or backplane supports SATA hot-swap;
+- retained CRC trend monitoring and live RAID recovery/rebuild/resync/reshape monitoring;
+- updated the modular compatibility bridge to use the v1.76 engine;
+- synchronized package metadata and documentation with v1.76;
+- removed the obsolete v1.75 root scripts while preserving their history in Git.
+
 This file preserves the visible release history of MDADM Manager. Older versions are no longer kept as active scripts at the repository root, but their changes remain documented here and in the Git history.
 
 ## v1.75 FULL — 2026-09-13
