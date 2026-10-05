@@ -8,14 +8,14 @@
 
 ## Current Version
 
-### **v1.76 — FULL / MODULAR**
+### **v1.77 — FULL / MODULAR**
 
-v1.76 is the current reference engine. The repository also includes the `mdadm_matrix/` modular package, whose launcher loads the v1.76 engine so the application can be refactored progressively without dropping current features or RAID safeguards.
+v1.77 is the current reference engine. The repository also includes the `mdadm_matrix/` modular package, whose launcher loads the v1.77 engine so the application can be refactored progressively without dropping current features or RAID safeguards.
 
 Current engine:
 
 ```text
-mdadm_manager_v1.76.py
+mdadm_manager_v1.77.py
 ```
 
 Modular package:
@@ -68,9 +68,15 @@ The repository keeps only the current active application at its root. Older rele
 
 ---
 
-## v1.76 recovery workflow
+## v1.77 mdadm.conf duplicate protection
 
-v1.76 strengthens the maintenance path for the common case where a RAID disk is removed because of a SATA cable or connection problem and the **same physical disk** is later reconnected.
+v1.77 fixes a configuration safety issue discovered on 2026-10-05: running **Scan arrays** repeatedly could append the same `ARRAY` definitions to the configuration editor. Saving that editor content could then write duplicate array names/UUIDs to `/etc/mdadm/mdadm.conf`, causing `mdadm --assemble --scan` to refuse automatic assembly after reboot.
+
+The v1.77 engine now normalizes `ARRAY` definitions by UUID during scans and again immediately before saving. Repeated **Scan → Save** operations are therefore idempotent: an array UUID is kept only once while comments and non-`ARRAY` directives are preserved. A timestamped backup is still created before replacing `mdadm.conf`.
+
+## v1.77 recovery workflow
+
+v1.77 strengthens the maintenance path for the common case where a RAID disk is removed because of a SATA cable or connection problem and the **same physical disk** is later reconnected.
 
 The application records and compares RAID slot information, disk serial identity and mdadm metadata. The device name is not treated as a stable identity because Linux can assign a different `/dev/sdX` name after a disconnect or hot-swap.
 
@@ -83,7 +89,7 @@ For reintegration, the diagnostic path is read-only. When the selected disk is v
 ## Modular architecture
 
 ```text
-mdadm_manager_v1.76.py        # current complete v1.76 engine
+mdadm_manager_v1.77.py        # current complete v1.77 engine
 mdadm_matrix/
 ├── __init__.py
 ├── __main__.py
@@ -103,7 +109,7 @@ mdadm_matrix/
 └── wizard.py
 ```
 
-`full_engine.py` is the compatibility bridge to `mdadm_manager_v1.76.py`. Existing modules can be migrated progressively while the current engine remains the functional reference.
+`full_engine.py` is the compatibility bridge to `mdadm_manager_v1.77.py`. Existing modules can be migrated progressively while the current engine remains the functional reference.
 
 ---
 
@@ -129,10 +135,10 @@ git clone https://github.com/st3ph666/MDADM-Manager.git
 cd MDADM-Manager
 ```
 
-### Run the current v1.76 engine
+### Run the current v1.77 engine
 
 ```bash
-python3 mdadm_manager_v1.76.py
+python3 mdadm_manager_v1.77.py
 ```
 
 The application will request root elevation when needed.
@@ -147,7 +153,7 @@ python3 -m mdadm_matrix
 
 ```bash
 uv sync
-uv run python mdadm_manager_v1.76.py
+uv run python mdadm_manager_v1.77.py
 ```
 
 or:
@@ -161,7 +167,7 @@ uv run python -m mdadm_matrix
 ```bash
 git pull
 uv sync
-uv run python mdadm_manager_v1.76.py
+uv run python mdadm_manager_v1.77.py
 ```
 
 ---
@@ -178,6 +184,6 @@ These protections reduce operational mistakes but do not replace verified backup
 
 ## Version history
 
-See [CHANGELOG.md](CHANGELOG.md) for published milestones and the v1.76 release notes.
+See [CHANGELOG.md](CHANGELOG.md) for published milestones and the v1.77 release notes.
 
-**Current release: v1.76 FULL / MODULAR**
+**Current release: v1.77 FULL / MODULAR**
