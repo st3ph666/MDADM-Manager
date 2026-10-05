@@ -1,5 +1,16 @@
 # Version History
 
+## v1.77 — 2026-10-05
+
+- fixed a configuration safety bug where repeated **Scan arrays** operations could append duplicate `ARRAY` definitions to the editor;
+- documented the real-world failure mode: duplicate names/UUIDs in `/etc/mdadm/mdadm.conf` can make `mdadm --assemble --scan` refuse automatic RAID assembly after reboot;
+- added normalization of `ARRAY` entries by UUID during scans;
+- added a second deduplication barrier immediately before saving `mdadm.conf`;
+- made repeated **Scan → Save** operations idempotent while preserving comments and non-`ARRAY` directives;
+- retained timestamped backups before writing `/etc/mdadm/mdadm.conf`;
+- promoted v1.77 as the current FULL / MODULAR reference engine;
+- updated the modular compatibility bridge, package metadata and documentation to v1.77.
+
 ## v1.76 — 2026-09-17
 
 - promoted v1.76 as the current FULL / MODULAR release;
